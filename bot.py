@@ -32,6 +32,7 @@ class Bot:
         self.config = hello["config"]
         self.map = ArenaMap(hello["map"]["dir"], self.config)
         self.ground_routes = GroundReachability(self.map)
+        self.ground_goal_pending = False
         self.combat = Combat(self.config, self.map.line_of_fire)
         self.tactical = TacticalPlanner(self.config, self.map)
         self.slot = hello["slot"]
@@ -556,6 +557,10 @@ class Bot:
         zone = obs["zone"]
         center, future_radius = self.zone_future(obs, 12)
         p = me["pos"]
+        ground_scope = (self.ground_routes.index is not None and
+                        abs(p[2] - self.map.ground_height(*p[:2])) <= self.map.step_up + .02)
+        if self.ground_routes.index is not None and not ground_scope:
+            self.ground_goal_pending = True
         urgent = not me["in_zone"] or distance(p, center) + s["radius"] + 8 > future_radius
         resource = self.resource_goal(obs, threats, deadline=min(deadline - .017, time.perf_counter() + .004)) if not urgent else None
         self.resource_key = resource[3] if resource else None
@@ -568,7 +573,16 @@ class Bot:
         else:
             self.mode = "engage" if target else "position"
         if urgent or (self.recover and not resource) or (not target and not resource):
-            if self.goal is None or t >= self.goal_until or self.goal_kind != self.mode or distance(self.goal, center) > future_radius:
+            refresh_goal = (self.goal is None or t >= self.goal_until or
+                            self.goal_kind != self.mode or distance(self.goal, center) > future_radius)
+            if not refresh_goal and ground_scope and self.ground_goal_pending:
+                # An airborne UNKNOWN is provisional. Recheck a held safe goal
+                # when the ground graph applies again, within the same budget.
+                verdict = self.ground_routes.begin(p, s["radius"], s["height"], deadline - .013).classify(self.goal)
+                refresh_goal = verdict == NO
+                if verdict == YES:
+                    self.ground_goal_pending = False
+            if refresh_goal:
                 self.goal = self.safe_goal(obs, threats, s, deadline - .013)
                 self.goal_until = t + (1.2 if urgent or self.recover else 8)
                 self.goal_kind = self.mode
