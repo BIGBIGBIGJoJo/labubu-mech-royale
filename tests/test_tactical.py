@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import time
 import unittest
+from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -128,6 +129,46 @@ class TacticalTests(unittest.TestCase):
     def test_current_occlusion_does_not_reduce_intrinsic_strength(self):
         actor={'id':3,'kind':'mech','pos':[50,0,0],'weapons':['gun'],'cubes':0}
         self.assertGreater(self.planner._strength(actor,50),self.planner._strength(actor,150))
+
+    def budgeted_validation(self,available):
+        """A deterministic 5ms collision check exposes scheduling starvation.
+
+        The mocked check obeys the provided deadline. Real geometry behavior
+        is covered separately; no sleep or machine-speed assumption is needed.
+        """
+        clock=[10.0]
+        actor={'id':3,'kind':'mech','pos':[50,0,0],'vel':[0,0,0],
+               'aim':[math.pi,0],'charging':True,'weapons':['gun','laser'],'cubes':0}
+        threat={'actor':actor,'d':50,'los':True}
+        completed=[]
+        def geometry(path,stats,deadline,direction=None,boost=False,charging=False):
+            duration=min(.005,max(0.,deadline-clock[0]))
+            clock[0]+=duration
+            if duration<.005-1e-9:return None
+            completed.append(path)
+            return path
+        kwargs={} if available is None else {'deadline':clock[0]+available}
+        with patch('tactical.time.perf_counter',side_effect=lambda:clock[0]), \
+                patch.object(self.planner,'_geometry',side_effect=geometry):
+            result=self.planner.choose(self.obs,(0,1),[threat],self.stats,**kwargs)
+        return len(completed),clock[0]-10.0,result
+
+    def test_supplied_global_budget_can_complete_six_geometry_candidates(self):
+        completed,elapsed,result=self.budgeted_validation(.032)
+        self.assertEqual(completed,6)
+        self.assertEqual(self.planner.last_report['geometry_checked'],6)
+        self.assertFalse(self.planner.last_report['fallback'])
+        self.assertLessEqual(elapsed,.032-.0015+1e-9)
+
+    def test_standalone_tactical_call_keeps_default_budget(self):
+        completed,elapsed,result=self.budgeted_validation(None)
+        self.assertEqual(completed,2)
+        self.assertLessEqual(elapsed,.014-.0015+1e-9)
+
+    def test_short_caller_budget_is_not_extended(self):
+        completed,elapsed,result=self.budgeted_validation(.009)
+        self.assertEqual(completed,1)
+        self.assertLessEqual(elapsed,.009-.0015+1e-9)
 
 
 if __name__=='__main__':
