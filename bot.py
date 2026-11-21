@@ -58,6 +58,7 @@ class Bot:
         self.target_id = None
         self.failed_goals = []
         self.goal_progress = None
+        self.actor_memory = {}
 
     def stats(self, me):
         stats = {**self.config["mech"], **me.get("stats", {})}
@@ -85,11 +86,19 @@ class Bot:
 
     def update(self, obs):
         t, me = obs["t"], obs["self"]
+        for actor in obs.get("mechs", []):
+            if actor.get("hp", 1) > 0:
+                snapshot = {**actor, "pos": list(actor["pos"]),
+                            "vel": list(actor.get("vel", (0, 0, 0))),
+                            "weapons": list(actor.get("weapons", []))}
+                self.actor_memory[actor["id"]] = (snapshot, t)
         if t >= self.visit_t + 1:
             cell = (int(me["pos"][0] // 35), int(me["pos"][1] // 35))
             self.visited[cell] = self.visited.get(cell, 0) + 1
             self.visit_t = t
         for event in obs.get("events", []):
+            if event["type"] == "kill":
+                self.actor_memory.pop(event.get("target"), None)
             if event["type"] in ("hit", "damaged"):
                 self.last_combat = t
             if event["type"] == "damaged":
@@ -122,6 +131,7 @@ class Bot:
         self.blacklist = {k: until for k, until in self.blacklist.items() if until > t}
         self.recent_attackers = {k: seen for k, seen in self.recent_attackers.items() if t - seen < 5}
         self.failed_goals = [(point, until) for point, until in self.failed_goals if until > t]
+        self.actor_memory = {actor_id: value for actor_id, value in self.actor_memory.items() if t - value[1] < 8}
 
     def actor_center(self, actor):
         if actor.get("kind") == "npc":
@@ -203,6 +213,80 @@ class Bot:
         if obs["zone"]["radius"] < 55:
             rank["lightning"] = 4
         return rank
+
+    def repair_before_projected_finish(self, obs, target):
+        """Estimate repair advantage for movement, never suppress a viable shot."""
+        if target is None or target.get("kind") != "mech":
+            return False
+        me = obs["self"]
+        d = distance(me["pos"], target["pos"])
+        scale = 1 + self.config["cubes"]["damage_per_cube"] * min(me["cubes"], self.config["cubes"]["stat_cap"])
+        for drop in obs.get("drops", []):
+            if drop.get("holder") != target["id"] or drop["lands_in"] > 0:
+                continue
+            if distance(me["pos"], drop["pos"]) <= drop["radius"]:
+                continue  # Our presence freezes the opponent's capture clock.
+            if any(a["kind"] == "mech" and a["id"] != target["id"]
+                   and distance(a["pos"], drop["pos"]) <= drop["radius"] for a in obs.get("mechs", [])):
+                continue
+            remaining = max(0, drop["capture_s"] - drop.get("progress", 0))
+            if remaining > 3:
+                continue
+            maximum = 0.0
+            for weapon in me["weapons"]:
+                if not weapon:
+                    continue
+                stats, kind = weapon["stats"], weapon["kind"]
+                first = max(.05, weapon.get("cooldown", 0))
+                if kind == "gun":
+                    if d > stats["range"]:
+                        continue
+                    first = max(first, weapon.get("reload", 0))
+                    ammo = stats["mag"] if weapon.get("reload", 0) > 0 else weapon.get("ammo", 0)
+                    if ammo <= 0:
+                        first = max(first, stats["reload"])
+                        ammo = stats["mag"]
+                    # Credit potentially outstanding bullets and ignore new
+                    # bullet flight time: uncertainty must favor a possible kill.
+                    body = self.config["mech"]["radius"] * (1 + self.config["cubes"]["size_per_cube"] * target.get("cubes", 0))
+                    flight = max(0, d - self.stats(me)["radius"] - .5 - body) / stats["speed"]
+                    pending = min(stats["mag"], math.ceil(flight / stats["cooldown"]))
+                    shots = 0
+                    while first <= remaining and shots < 128:
+                        shots += 1
+                        ammo -= 1
+                        if ammo == 0:
+                            first += stats["reload"]
+                            ammo = stats["mag"]
+                        else:
+                            first += stats["cooldown"]
+                    maximum += (shots + pending) * stats["damage"]
+                elif kind == "lightning":
+                    first = max(first, max(0, d - stats["range"]) / self.stats(me)["boost_speed"])
+                    shots = max(0, 1 + int((remaining - first) / stats["cooldown"])) if remaining >= first else 0
+                    maximum += shots * stats["damage"]
+                else:
+                    # This gate concerns the gun/lightning commitment. Avoid
+                    # claiming impossibility for an unmodeled laser/mortar shot.
+                    return False
+            maximum *= scale * self.config["mech"]["rear_mult"]
+            if maximum + 1e-6 < target.get("hp", 1400):
+                return True
+        return False
+
+    def lightning_commit(self, obs, target, visible_count):
+        me = obs["self"]
+        if visible_count > 1 or me["energy"] < 55 or target.get("kind") != "mech":
+            return False
+        enemy_weapons = target.get("weapons", [])
+        if "mortar" in enemy_weapons or self.repair_before_projected_finish(obs, target):
+            return False
+        lightning = next((w for w in me["weapons"] if w and w["kind"] == "lightning"), None)
+        if lightning is None:
+            return False
+        short_advantage = "laser" in enemy_weapons and distance(me["pos"], target["pos"]) <= lightning["stats"]["range"] + 15
+        effective_hp = me["hp"] / max(.05, 1 - self.stats(me).get("armor", 0))
+        return effective_hp >= target.get("hp", target.get("max_hp", 1400)) * (.8 if short_advantage else .95)
 
     def defensive_yaw(self, obs, threats):
         """Keep several attackers in the front armor arc during a long reload."""
@@ -345,6 +429,16 @@ class Bot:
         """Price completion time and exposure for each reachable opportunity."""
         me, t = obs["self"], obs["t"]
         p, stats = me["pos"], self.stats(me)
+        # An actor expiring from the server's visible list does not establish
+        # that a nearby resource became uncontested. These extra memories are
+        # resource hazards only; they never become speculative firing targets.
+        known = {q["actor"]["id"] for q in threats}
+        threats = list(threats) + [
+            {"actor": actor, "d": distance(p, actor["pos"]), "los": False, "risk": .2, "remembered": True}
+            for actor_id, (actor, seen) in self.actor_memory.items()
+            if actor_id not in known and t - seen < 8
+        ]
+        threats.sort(key=lambda q: q["d"])
         speed = max(1, stats["walk_speed"])
         candidates = []
         held = {w["kind"] for w in me["weapons"] if w}
@@ -606,7 +700,7 @@ class Bot:
             preferred = 150 if "laser" in held else 120
             if q.get("kind") == "npc":
                 preferred = 35
-            if "lightning" in held and hp > .7 and len(visible) <= 1 and q.get("kind") == "mech":
+            if "lightning" in held and hp > .7 and self.lightning_commit(obs, q, len(visible)):
                 preferred = 33 if "laser" in q.get("weapons", []) else 38
             if len(visible) >= 2:
                 preferred += 35

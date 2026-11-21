@@ -47,6 +47,46 @@ def intercept_time(relative, velocity, speed):
     return min(positive) if positive else None
 
 
+def _roots_between(coefficients, low, high):
+    """Bounded real roots of a small polynomial using derivative isolation.
+
+    Mortar interception gives a quartic. Its derivative partitions the time
+    interval into monotone pieces, each needing at most 32 bisection steps.
+    """
+    while len(coefficients) > 1 and abs(coefficients[0]) < 1e-12:
+        coefficients = coefficients[1:]
+    degree = len(coefficients) - 1
+    if degree == 0:
+        return []
+    if degree == 1:
+        root = -coefficients[1] / coefficients[0]
+        return [root] if low <= root <= high else []
+    def evaluate(t):
+        value = 0.0
+        for coefficient in coefficients:
+            value = value * t + coefficient
+        return value
+    derivative = [coefficient * (degree - i) for i, coefficient in enumerate(coefficients[:-1])]
+    points = [low] + _roots_between(derivative, low, high) + [high]
+    roots = []
+    for point in points:
+        if abs(evaluate(point)) < 1e-7:
+            roots.append(point)
+    for a, b in zip(points, points[1:]):
+        fa, fb = evaluate(a), evaluate(b)
+        if fa * fb >= 0:
+            continue
+        for _ in range(32):
+            midpoint = (a + b) * 0.5
+            fm = evaluate(midpoint)
+            if fa * fm <= 0:
+                b, fb = midpoint, fm
+            else:
+                a, fa = midpoint, fm
+        roots.append((a + b) * 0.5)
+    return sorted(set(round(root, 10) for root in roots))
+
+
 class Combat:
     def __init__(self, config, line_of_fire=None):
         self.config = config
@@ -248,47 +288,62 @@ class Combat:
                 "horizontal": math.dist(shot_origin[:2], predicted[:2]),
                 "distance": distance, "clear": clear, "flight": flight, "center_z": center_z}
 
+    def _arc_clear(self, base, launch, aim, stats, flight):
+        if not self._clear(base, launch):
+            return False
+        vec = direction(aim)
+        speed, gravity = stats.get("speed", 72.0), stats.get("gravity", 22.0)
+        # Limit chord/parabola deviation to roughly four centimeters at the
+        # default gravity. This also checks short ceilings along the arc.
+        step_time = min(0.12, math.sqrt(0.32 / max(gravity, 1e-6)))
+        count = max(12, min(96, math.ceil(flight / step_time)))
+        previous = list(launch)
+        for step in range(1, count + 1):
+            t = flight * step / count
+            point = [launch[i] + speed * vec[i] * t for i in range(3)]
+            point[2] -= 0.5 * gravity * t * t
+            if not self._clear(previous, point):
+                return False
+            previous = point
+        return True
+
     def _mortar_solution(self, stats, origin, center, velocity, me, self_stats, limits):
         speed = float(stats.get("speed", 72.0))
         gravity = float(stats.get("gravity", 22.0))
         if speed <= 0 or gravity <= 0:
             return None
-        point = list(center)
-        flight = 0.0
-        for _ in range(4):
-            dx, dy, dz = (point[i] - origin[i] for i in range(3))
-            horizontal = math.hypot(dx, dy)
-            if horizontal < max(15.0, stats.get("splash_radius", 7.0) + self_stats["radius"] + 3.0):
-                return None
-            discriminant = speed ** 4 - gravity * (gravity * horizontal ** 2 + 2.0 * dz * speed ** 2)
-            if discriminant < 0.0:
-                return None
-            pitch = math.atan2(speed * speed - math.sqrt(discriminant), gravity * horizontal)
-            if not limits[0] <= pitch <= limits[1]:
-                return None
-            flight = horizontal / max(1e-8, speed * math.cos(pitch))
-            if flight > stats.get("ttl", 7.0):
-                return None
-            point = [center[i] + velocity[i] * flight for i in range(3)]
-        aim = [math.atan2(point[1] - origin[1], point[0] - origin[0]), pitch]
-        vec = direction(aim)
-        previous = list(origin)
-        # Fixed work bound. A conservative extra collision margin belongs in
-        # the arena segment checker, which has the actual terrain geometry.
-        for step in range(1, 17):
-            t = flight * step / 16.0
-            sample = [origin[i] + speed * vec[i] * t for i in range(3)]
-            sample[2] -= 0.5 * gravity * t * t
-            if not self._clear(previous, sample):
-                return None
-            previous = sample
-        future_self = [me["pos"][i] + me.get("vel", [0, 0, 0])[i] * flight for i in range(3)]
+        relative = [center[i] - origin[i] for i in range(3)]
         safety = stats.get("splash_radius", 7.0) + self_stats["radius"] + 3.0
+        if math.hypot(*relative[:2]) < max(15.0, safety):
+            return None
+        offset = self_stats["radius"] + 0.5
+        # target(t)-tube + gravity compensation = aim*(speed*t + offset).
+        # Squaring yields a quartic; the earliest positive root is the low arc.
+        coefficients = [0.25 * gravity * gravity, gravity * velocity[2],
+                        sum(v * v for v in velocity) + gravity * relative[2] - speed * speed,
+                        2 * sum(r * v for r, v in zip(relative, velocity)) - 2 * speed * offset,
+                        sum(r * r for r in relative) - offset * offset]
+        roots = _roots_between(coefficients, 1e-5, float(stats.get("ttl", 7.0)))
+        if not roots:
+            return None
+        flight = roots[0]
+        displacement = [relative[i] + velocity[i] * flight for i in range(3)]
+        displacement[2] += 0.5 * gravity * flight * flight
+        aim = [math.atan2(displacement[1], displacement[0]),
+               math.atan2(displacement[2], math.hypot(*displacement[:2]))]
+        if not limits[0] <= aim[1] <= limits[1]:
+            return None
+        vec = direction(aim)
+        launch = [origin[i] + offset * vec[i] for i in range(3)]
+        point = [center[i] + velocity[i] * flight for i in range(3)]
+        if not self._arc_clear(origin, launch, aim, stats, flight):
+            return None
+        future_self = [me["pos"][i] + me.get("vel", [0, 0, 0])[i] * flight for i in range(3)]
         if min(math.dist(me["pos"][:2], point[:2]), math.dist(future_self[:2], point[:2])) < safety:
             return None
-        return {"aim": aim, "point": point, "origin": origin,
-                "horizontal": math.dist(origin[:2], point[:2]),
-                "distance": math.dist(origin, point), "clear": True, "flight": flight}
+        return {"aim": aim, "point": point, "origin": launch, "base_origin": list(origin),
+                "horizontal": math.dist(launch[:2], point[:2]),
+                "distance": math.dist(launch, point), "clear": True, "flight": flight}
 
     def plan(self, obs, target, allow_fire=True, emergency=False):
         me = obs["self"]
@@ -320,7 +375,7 @@ class Combat:
         origin = list(me["pos"])
         origin[2] += own.get("muzzle_height", 7.0)
         limits = (own.get("min_pitch", -0.7), own.get("max_pitch", 1.3))
-        solutions, stats_by_slot, ready, fire_delay = {}, {}, {}, {}
+        solutions, stats_by_slot, ready, fire_delay, origins = {}, {}, {}, {}, {}
         for slot, weapon in enumerate(weapons):
             if not weapon:
                 continue
@@ -337,13 +392,21 @@ class Combat:
             if kind == "laser" and weapon.get("charge", 0.0) > 0:
                 fire_delay[slot] = self.sim_dt
             launch_target = [center[i] + velocity[i] * fire_delay[slot] for i in range(3)]
+            # Observed beam origins show XY movement before firing each physics
+            # tick. Predict that launch translation; bullets themselves have no
+            # inherited shooter velocity. Ground height is intentionally held.
+            own_velocity = me.get("vel", [0.0, 0.0, 0.0])
+            launch_origin = [origin[0] + own_velocity[0] * fire_delay[slot],
+                             origin[1] + own_velocity[1] * fire_delay[slot], origin[2]]
+            if not self._clear(origin, launch_origin):
+                launch_origin = list(origin)
+            origins[slot] = launch_origin
             if kind == "mortar":
-                mortar_origin = list(me["pos"])
-                mortar_origin[2] += own.get("height", 9.0) + 0.5
+                mortar_origin = [launch_origin[0], launch_origin[1], me["pos"][2] + own.get("height", 9.0) + 0.5]
                 # Do not perform arc checks for a weapon that cannot shoot.
                 sol = self._mortar_solution(stats, mortar_origin, launch_target, velocity, me, own, limits) if ready[slot] else None
             else:
-                sol = self._direct_solution(kind, stats, origin, launch_target, velocity, own["radius"] + 0.5, limits, height)
+                sol = self._direct_solution(kind, stats, launch_origin, launch_target, velocity, own["radius"] + 0.5, limits, height)
             if sol:
                 solutions[slot] = sol
 
@@ -414,7 +477,7 @@ class Combat:
                 aligned = valid and self._aligned(actual_next, sol, radius, height,
                                                   projectile_radius)
                 if aligned and ready[slot]:
-                    aligned = self._actual_ray_clear(origin, own["radius"] + 0.5, actual_next, sol,
+                    aligned = self._actual_ray_clear(origins[slot], own["radius"] + 0.5, actual_next, sol,
                                                      radius, height, projectile_radius)
                 reload_ending = 0 < weapon.get("reload", 0) <= self.action_dt + 1e-6
                 action["fire"][slot] = bool(ready[slot] and aligned and weapon.get("reload", 0) <= self.action_dt + 1e-6
@@ -426,7 +489,7 @@ class Combat:
                 full = float(stats.get("charge", 0.75))
                 aligned = valid and self._aligned(actual_next, sol, radius, height)
                 if aligned and charge > 0:
-                    aligned = self._actual_ray_clear(origin, own["radius"] + 0.5, actual_next, sol, radius, height)
+                    aligned = self._actual_ray_clear(origins[slot], own["radius"] + 0.5, actual_next, sol, radius, height)
                 if charge >= full - 1e-6:
                     self._full_since.setdefault(slot, now)
                 else:
@@ -458,4 +521,9 @@ class Combat:
                 action["fire"][slot] = bool(ready[slot] and valid and owner == slot
                     and abs(angle_delta(sol["aim"][0], actual_next[0])) < 0.018
                     and abs(sol["aim"][1] - actual_next[1]) < 0.012)
+                if action["fire"][slot]:
+                    vec = direction(actual_next)
+                    base = sol["base_origin"]
+                    launch = [base[i] + (own["radius"] + 0.5) * vec[i] for i in range(3)]
+                    action["fire"][slot] = self._arc_clear(base, launch, actual_next, stats, sol["flight"])
         return action

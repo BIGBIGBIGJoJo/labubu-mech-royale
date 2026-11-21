@@ -85,6 +85,63 @@ class CombatTests(unittest.TestCase):
         delayed = combat.Combat(CONFIG).plan(observation(weapon("gun", cooldown=0.09)), target)
         self.assertGreater(delayed["aim"][0], immediate["aim"][0] + 0.004)
 
+    def test_weapon_launch_origins_move_at_the_first_eligible_tick(self):
+        for kind in ("gun", "laser", "lightning", "mortar"):
+            for cooldown, delay in ((0, 0.05), (0.09, 0.1)):
+                with self.subTest(kind=kind, cooldown=cooldown):
+                    controller = combat.Combat(CONFIG)
+                    obs = observation(weapon(kind, cooldown=cooldown))
+                    obs["self"]["vel"] = [10, -8, 6]
+                    captured = {}
+                    if kind == "mortar":
+                        original = controller._mortar_solution
+                        def solve(*args):
+                            captured.update(origin=args[1], velocity=args[3])
+                            return original(*args)
+                        controller._mortar_solution = solve
+                    else:
+                        original = controller._direct_solution
+                        def solve(*args):
+                            captured.update(origin=args[2], velocity=args[4])
+                            return original(*args)
+                        controller._direct_solution = solve
+                    controller.plan(obs, enemy(120, 0, [0, 12, 0]))
+                    self.assertAlmostEqual(captured["origin"][0], 10 * delay)
+                    self.assertAlmostEqual(captured["origin"][1], -8 * delay)
+                    self.assertAlmostEqual(captured["origin"][2], 9.5 if kind == "mortar" else 7.0)
+                    # Projectiles do not inherit shooter velocity.
+                    self.assertEqual(captured["velocity"], [0, 12, 0])
+
+    def test_charged_laser_release_uses_next_tick_origin(self):
+        obs = observation(weapon("laser", charge=0.75, cooldown=0.09))
+        obs["self"]["vel"] = [0, 10, 0]
+        action = combat.Combat(CONFIG).plan(obs, enemy(100))
+        self.assertAlmostEqual(action["aim"][0], math.atan2(-0.5, 100), places=7)
+        self.assertFalse(action["fire"][0])
+
+    def test_actual_ray_starts_at_predicted_launch_position(self):
+        controller = combat.Combat(CONFIG)
+        obs = observation(weapon("gun", cooldown=0.09))
+        obs["self"]["vel"] = [0, 10, 0]
+        captured = []
+        original = controller._actual_ray_clear
+        def actual_ray(*args):
+            captured.append(list(args[0]))
+            return original(*args)
+        controller._actual_ray_clear = actual_ray
+        self.assertTrue(controller.plan(obs, enemy(100))["fire"][0])
+        self.assertEqual(captured, [[0, 1, 7]])
+
+    def test_launch_motion_does_not_extrapolate_through_blocked_segment(self):
+        def clear(a, b):
+            return not (a == [0, 0, 7] and b == [0, 1, 7])
+        controller = combat.Combat(CONFIG, clear)
+        obs = observation(weapon("gun", cooldown=0.09))
+        obs["self"]["vel"] = [0, 10, 0]
+        action = controller.plan(obs, enemy())
+        self.assertAlmostEqual(action["aim"][0], 0)
+        self.assertTrue(action["fire"][0])
+
     def test_large_mech_can_aim_at_close_opponents_upper_body(self):
         controller = combat.Combat(CONFIG)
         obs = observation(weapon("gun"))
@@ -305,6 +362,81 @@ class CombatTests(unittest.TestCase):
         self.assertTrue(controller.plan(obs, target)["fire"][0])
         blocked = combat.Combat(CONFIG, lambda a, b: False).plan(obs, target)
         self.assertFalse(blocked["fire"][0])
+
+    def test_mortar_barrel_offset_intercept_matches_physical_trajectory(self):
+        for cubes in (0, 8, 23):
+            for distance, altitude, velocity in ((80, -5, [0, 0, 0]),
+                                                 (150, 20, [0, 10, 2]),
+                                                 (220, 0, [-3, 0, 0])):
+                with self.subTest(cubes=cubes, distance=distance, altitude=altitude):
+                    controller = combat.Combat(CONFIG)
+                    me = observation(weapon("mortar"))["self"]
+                    me["cubes"] = cubes
+                    own = controller._self_stats(me)
+                    base = [0, 0, own["height"] + 0.5]
+                    center = [distance, 0, altitude + 4.5]
+                    stats = CONFIG["weapons"]["mortar"]
+                    sol = controller._mortar_solution(stats, base, center, velocity, me, own, [-0.7, 1.3])
+                    self.assertIsNotNone(sol)
+                    t = sol["flight"]
+                    vec = combat.direction(sol["aim"])
+                    endpoint = [sol["origin"][i] + stats["speed"] * vec[i] * t for i in range(3)]
+                    endpoint[2] -= 0.5 * stats["gravity"] * t * t
+                    expected = [center[i] + velocity[i] * t for i in range(3)]
+                    self.assertLess(math.dist(endpoint, expected), 0.00001)
+                    self.assertAlmostEqual(math.dist(sol["origin"], base), own["radius"] + 0.5)
+
+    def test_mortar_grazing_maximum_range_root_is_not_missed(self):
+        controller = combat.Combat(CONFIG)
+        me = observation(weapon("mortar"))["self"]
+        own = controller._self_stats(me)
+        stats = CONFIG["weapons"]["mortar"]
+        speed, gravity, offset = stats["speed"], stats["gravity"], own["radius"] + 0.5
+        # At equal altitude, maximize (speed*t+offset)^2-(g*t^2/2)^2.
+        # Its derivative vanishes at the double root of the intercept quartic.
+        lo, hi = 0.0, stats["ttl"]
+        for _ in range(70):
+            t = (lo + hi) * 0.5
+            if gravity * gravity * t ** 3 - 2 * speed * speed * t - 2 * speed * offset > 0:
+                hi = t
+            else:
+                lo = t
+        grazing_t = (lo + hi) * 0.5
+        maximum = math.sqrt((speed * grazing_t + offset) ** 2 - (0.5 * gravity * grazing_t ** 2) ** 2)
+        base = [0, 0, own["height"] + 0.5]
+        sol = controller._mortar_solution(stats, base, [maximum, 0, base[2]], [0, 0, 0], me, own, [-0.7, 1.3])
+        self.assertIsNotNone(sol)
+        self.assertAlmostEqual(sol["flight"], grazing_t, places=5)
+        near = controller._mortar_solution(stats, base, [maximum - 0.01, 0, base[2]], [0, 0, 0], me, own, [-0.7, 1.3])
+        self.assertLess(near["flight"], grazing_t)
+        self.assertIsNone(controller._mortar_solution(stats, base, [maximum + 0.01, 0, base[2]], [0, 0, 0], me, own, [-0.7, 1.3]))
+
+    def test_mortar_checks_tube_to_barrel_segment(self):
+        def clear(a, b):
+            return not (a == [0, 0, 9.5] and 0 < math.dist(a, b) < 3.01)
+        controller = combat.Combat(CONFIG, clear)
+        self.assertFalse(controller.plan(observation(weapon("mortar")), enemy(150))["fire"][0])
+
+    def test_mortar_checks_actual_slewing_arc_against_ceiling(self):
+        target = enemy(150)
+        initial = combat.Combat(CONFIG).plan(observation(weapon("mortar")), target)
+        desired = initial["aim"]
+        # A thin overhang at x=80 clears the intended arc by 25 cm, but the
+        # still-slewing first-tick barrel points 0.011 rad higher and hits it.
+        speed, gravity, offset = 72, 22, 3
+        vec = combat.direction(desired)
+        t = (80 - offset * vec[0]) / (speed * vec[0])
+        ceiling = 9.5 + offset * vec[2] + speed * vec[2] * t - 0.5 * gravity * t * t + 0.25
+        def clear(a, b):
+            if min(a[0], b[0]) <= 80 <= max(a[0], b[0]) and a[0] != b[0]:
+                return a[2] + (b[2] - a[2]) * (80 - a[0]) / (b[0] - a[0]) < ceiling
+            return True
+        aligned = observation(weapon("mortar"))
+        aligned["self"]["aim"] = list(desired)
+        self.assertTrue(combat.Combat(CONFIG, clear).plan(aligned, target)["fire"][0])
+        slewing = copy.deepcopy(aligned)
+        slewing["self"]["aim"][1] += CONFIG["mech"]["pitch_rate"] * 0.05 + 0.011
+        self.assertFalse(combat.Combat(CONFIG, clear).plan(slewing, target)["fire"][0])
 
     def test_mortar_aim_commitment_survives_a_newly_ready_gun(self):
         controller = combat.Combat(CONFIG)
