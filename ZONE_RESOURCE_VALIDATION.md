@@ -1,6 +1,6 @@
 # C1 resource/rotation boundary and isolated prototype
 
-This is a conditional trace diagnosis and tested policy prototype, not a counterfactual game, private-match result, or official score improvement. The isolated worktree is `work/labubu-economy`, branch `goal/economy-seven`, based on frozen `39b6d509af8e82b0ceb9e1c430dd964674d7488e`. Nothing was committed or submitted, and no live games were started for this task.
+This is a conditional trace diagnosis and tested policy prototype, not a counterfactual game, private-match result, or official score improvement. The isolated worktree is `work/labubu-economy`, branch `goal/economy-seven`, based on frozen `39b6d509af8e82b0ceb9e1c430dd964674d7488e`. This report records pre-submission validation.
 
 ## Observed boundary failure
 
