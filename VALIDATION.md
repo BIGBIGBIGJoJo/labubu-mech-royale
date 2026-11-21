@@ -9,6 +9,16 @@ Verified on November 21, 2026. Official score means mean `16 - place` over
 |---|---|---:|---|
 | BB-062E97A7 | b49715d45447840d66a3e5d24624fdbf3f43389e | 2.77 | Accepted; above the published starter baseline 1.15 |
 | BB-F2B295B5 | b99310a760505c250b7afaf03e07269a4e47416d | 3.10 | Accepted; improved resource collection and targeting |
+| BB-80D20692 | 7c38fba27c3feb6f52c2b74b45423f63beb33ff5 | **4.19** | Accepted; current best and automatically selected entry |
+
+The last candidate improved the prior score by approximately 35%. It scores
+about 3.64 times the published starter baseline. Three accepted submissions were
+used; one hourly attempt remained when this result was verified. Two temporary
+form errors before the third receipt did not consume attempts according to the
+site's displayed counter. No fourth submission was made.
+
+The automatically selected entry is the commit above; this is **not** a claim
+of qualifying for the top-32 tournament or winning the track.
 
 Source: authenticated team's submission panel on the
 [official track page](https://www.joinbuilders.org/buildathon/tracks/builders).
