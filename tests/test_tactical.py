@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import time
 import unittest
+from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -124,6 +125,56 @@ class TacticalTests(unittest.TestCase):
     def test_unobstructed_goal_makes_progress(self):
         direction,boost=self.planner.choose(self.obs,(1,0),[],self.stats,goal=[50,0,0],deadline=time.perf_counter()+1)
         self.assertGreater(direction[0],.9)
+
+    def test_blocked_forward_candidates_do_not_hide_clear_side_route(self):
+        self.planner.map=WallMap()
+        self.me['pos']=[2.,0.,0.]
+        for energy,charge in ((100.,0.),(0.,0.),(100.,.2),(0.,.2)):
+            with self.subTest(energy=energy,charge=charge):
+                self.me['energy']=energy
+                self.me['weapons'][1]={'kind':'laser','charge':charge} if charge else None
+                self.planner.last_direction=(0.,0.)
+                with patch('tactical.time.perf_counter',return_value=100.):
+                    direction,boost=self.planner.choose(self.obs,(1,0),[],self.stats,goal=[50,0,0],deadline=101.)
+                    path=self.planner.rollout(self.me,direction,boost,self.stats)
+                    checked=self.planner._geometry(path,self.stats,101.,direction,boost,charge>0)
+                self.assertGreater(abs(direction[1]),.5,'Must move along the wall instead of getting stuck')
+                self.assertIsNotNone(checked)
+                self.assertFalse(self.planner.last_report['fallback'])
+                if not energy:
+                    self.assertFalse(boost)
+
+    def test_wall_escape_accounts_for_existing_momentum(self):
+        self.planner.map=WallMap()
+        self.me['vel']=[19.5,0.,0.]
+        with patch('tactical.time.perf_counter',return_value=100.):
+            direction,boost=self.planner.choose(self.obs,(0,1),[],self.stats,goal=[0,50,0],deadline=101.)
+            path=self.planner.rollout(self.me,direction,boost,self.stats)
+            checked=self.planner._geometry(path,self.stats,101.,direction,boost)
+        self.assertLess(direction[0],0.,'Turn against momentum before moving along the wall')
+        self.assertIsNotNone(checked)
+        self.assertLessEqual(max(state[1] for state in checked),3.)
+
+    def test_all_blocked_candidates_keep_neutral_fallback(self):
+        with patch.object(self.planner.map,'move_clear',return_value=False), \
+             patch('tactical.time.perf_counter',return_value=100.):
+            direction,boost=self.planner.choose(self.obs,(1,0),[],self.stats,deadline=101.)
+        self.assertEqual(direction,(0.,0.))
+        self.assertFalse(boost)
+        self.assertTrue(self.planner.last_report['fallback'])
+
+    def test_rejected_paths_stop_search_when_geometry_uses_budget(self):
+        clock=[100.]
+        def blocked(*args):
+            clock[0]=100.02
+            return False
+        with patch.object(self.planner.map,'move_clear',side_effect=blocked) as collision, \
+             patch('tactical.time.perf_counter',side_effect=lambda:clock[0]):
+            direction,boost=self.planner.choose(self.obs,(1,0),[],self.stats,deadline=101.)
+        self.assertEqual(collision.call_count,1)
+        self.assertEqual(direction,(0.,0.))
+        self.assertFalse(boost)
+        self.assertTrue(self.planner.last_report['fallback'])
 
     def test_current_occlusion_does_not_reduce_intrinsic_strength(self):
         actor={'id':3,'kind':'mech','pos':[50,0,0],'weapons':['gun'],'cubes':0}

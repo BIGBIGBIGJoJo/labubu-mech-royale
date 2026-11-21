@@ -38,6 +38,14 @@ def enemy(x=100, y=0, velocity=None):
             "vel": velocity or [0, 0, 0], "cubes": 0, "hp": 1400}
 
 
+def low_wall_clear(a, b):
+    """Thin wall at x=95, top 7.9: a distant mech's upper body is exposed."""
+    if min(a[0], b[0]) <= 95 <= max(a[0], b[0]) and a[0] != b[0]:
+        fraction = (95 - a[0]) / (b[0] - a[0])
+        return a[2] + fraction * (b[2] - a[2]) > 7.9
+    return True
+
+
 class CombatTests(unittest.TestCase):
     def test_intercept_stationary_and_out_running(self):
         self.assertAlmostEqual(combat.intercept_time([100, 0, 0], [0, 0, 0], 250), 0.4)
@@ -144,6 +152,55 @@ class CombatTests(unittest.TestCase):
         action = controller.plan(obs, enemy())
         self.assertGreater(action["aim"][1], 0.0)
         self.assertTrue(action["fire"][0])
+
+    def test_gun_waits_for_actual_ray_to_clear_low_wall(self):
+        controller = combat.Combat(CONFIG, low_wall_clear)
+        obs = observation(weapon("gun"))
+        obs["self"]["aim"] = [0, -0.2]
+        action = controller.plan(obs, enemy())
+        self.assertGreater(action["aim"][1], 0)
+        self.assertFalse(action["fire"][0])
+        obs["self"]["aim"] = controller._slewed(
+            obs["self"]["aim"], action["aim"], obs["self"]["stats"], 0.1)
+        obs["t"] += 0.1
+        self.assertTrue(controller.plan(obs, enemy())["fire"][0])
+
+    def test_gun_ready_in_second_frame_uses_that_frames_clear_ray(self):
+        controller = combat.Combat(CONFIG, low_wall_clear)
+        obs = observation(weapon("gun", cooldown=0.09))
+        obs["self"]["aim"] = [0, -0.2]
+        # Frame one is obstructed, but the gun cannot fire until frame two.
+        self.assertTrue(controller.plan(obs, enemy())["fire"][0])
+
+    def test_laser_holds_until_actual_ray_clears_low_wall(self):
+        controller = combat.Combat(CONFIG, low_wall_clear)
+        obs = observation(weapon("laser", charge=0.75))
+        obs["self"]["aim"] = [0, -0.2]
+        action = controller.plan(obs, enemy())
+        self.assertTrue(action["fire"][0])
+        obs["self"]["aim"] = controller._slewed(
+            obs["self"]["aim"], action["aim"], obs["self"]["stats"], 0.1)
+        obs["t"] += 0.1
+        self.assertFalse(controller.plan(obs, enemy())["fire"][0])
+
+    def test_gun_validates_every_launch_in_held_action(self):
+        target = enemy(100, 0, [0, 20, 0])
+        obs = observation(weapon("gun"), weapon("laser", charge=0.75))
+        obs["self"]["stats"]["turn_rate"] = 0.8
+        obs["self"]["aim"] = [0.12, -0.025]
+        # The laser owns aim. On frame one the slewing torso still leads the
+        # target enough for the gun; on frame two it no longer does.
+        self.assertTrue(combat.Combat(CONFIG).plan(obs, target)["fire"][0])
+        obs["self"]["weapons"][0]["stats"]["cooldown"] = 0.05
+        self.assertFalse(combat.Combat(CONFIG).plan(obs, target)["fire"][0])
+
+    def test_actual_ray_stops_at_near_target_surface(self):
+        # A different body point from the commanded point must be checked only
+        # until impact, not extended through the body into further geometry.
+        controller = combat.Combat(CONFIG, lambda a, b: max(a[0], b[0]) < 99)
+        solution = {"point": [100, 0, 4.5], "muzzle": [0, 0, 7],
+                    "center_z": 4.5, "clear": True}
+        self.assertTrue(controller._actual_ray_clear([0.01, -0.025], solution, 2.5, 9))
 
     def test_recovery_releases_laser_and_reloads_gun(self):
         obs = observation(weapon("gun", ammo=6), weapon("laser", charge=0.5))

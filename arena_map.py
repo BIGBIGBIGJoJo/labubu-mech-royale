@@ -347,13 +347,17 @@ class ArenaMap:
                 if self._solid(p,x+dx*mid,y+dy*mid):
                     return False
         cuts=self._terrain_cuts(start,end)
+        previous_b, previous_fb = None, 0.0
         for a,b in zip(cuts,cuts[1:]):
             if b-a<1e-10:
                 continue
             mid=(a+b)*0.5
-            fa=z+dz*a-self.ground_height(x+dx*a,y+dy*a)
+            # Adjacent cells share this exact point. Do not reuse over a skipped gap.
+            fa=(previous_fb if a == previous_b else
+                z+dz*a-self.ground_height(x+dx*a,y+dy*a))
             fb=z+dz*b-self.ground_height(x+dx*b,y+dy*b)
             fm=z+dz*mid-self.ground_height(x+dx*mid,y+dy*mid)
+            previous_b, previous_fb = b, fb
             if min(fa,fb,fm)<0.05:
                 return False
             # Ground along a line through one bilinear cell is quadratic.

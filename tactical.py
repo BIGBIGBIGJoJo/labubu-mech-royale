@@ -358,15 +358,19 @@ class TacticalPlanner:
         ranked.sort(key=lambda item:item[0])
         best=None
         checked=0
-        # Exact geometry and incoming LOS are reserved for promising candidates.
+        valid=0
+        charging=any(w and w["kind"]=="laser" and w.get("charge",0)>0 for w in me["weapons"])
+        # Only feasible paths consume the expensive LOS shortlist. Near a wall,
+        # every high-progress proposal can collide; keep looking for a clear
+        # side/back route while the same wall-clock deadline permits it.
         for cost,direction,boost,path,bullet,exposure in ranked:
-            if time.perf_counter()>=deadline or checked>=6:
+            if time.perf_counter()>=deadline or valid>=6:
                 break
             checked+=1
-            charging=any(w and w["kind"]=="laser" and w.get("charge",0)>0 for w in me["weapons"])
             corrected=self._geometry(path,stats,deadline,direction,boost,charging)
             if corrected is None:
                 continue
+            valid+=1
             adjusted=cost-bullet-exposure*(1.0 if recover else .65)
             adjusted+=self.projectile_cost(corrected,tracks,stats)
             adjusted+=self._exposure(corrected,pressure[:2],stats,True,deadline)*(1.0 if recover else .65)
@@ -375,7 +379,7 @@ class TacticalPlanner:
                 adjusted+=self._exposure(corrected,pressure[2:],stats,False,deadline)*(1.0 if recover else .65)
             if best is None or adjusted<best[0]:
                 best=(adjusted,direction,boost)
-            if checked>=3 and not tracks and not any(q["actor"].get("charging") for q in pressure):
+            if valid>=3 and not tracks and not any(q["actor"].get("charging") for q in pressure):
                 break
         if best is None:
             # A neutral intention brakes under the same acceleration limit. It

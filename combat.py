@@ -149,6 +149,66 @@ class Combat:
         return (abs(angle_delta(solution["aim"][0], actual_next[0])) <= yaw_tolerance
                 and pitch_low <= actual_next[1] <= pitch_high)
 
+    def _actual_ray_clear(self, actual_aim, solution, radius, height, projectile_radius=0.0):
+        """Check the ray that can fire, not just the requested body point.
+
+        Alignment permits any hit inside the body. Cover can hide part of that
+        interval while the commanded upper/lower-body point remains clear.
+        Include the muzzle extension in the segment, as in _direct_solution.
+        """
+        origin = solution["muzzle"]
+        vec = direction(actual_aim)
+        point = solution["point"]
+        horizontal = math.dist(origin[:2], point[:2])
+        length = horizontal / max(1e-8, math.hypot(vec[0], vec[1]))
+        end = [origin[i] + vec[i] * length for i in range(3)]
+        # Once slew is complete this is the already checked solution segment.
+        if math.dist(end, point) < 1e-6:
+            return solution["clear"]
+        # Intersect the ray with the target cylinder. Check only to its near
+        # surface; geometry behind an already hit target must not block fire.
+        dx, dy = origin[0] - point[0], origin[1] - point[1]
+        a = vec[0] * vec[0] + vec[1] * vec[1]
+        b = 2.0 * (dx * vec[0] + dy * vec[1])
+        c = dx * dx + dy * dy - (radius + projectile_radius) ** 2
+        enter, leave = 0.0, float("inf")
+        if a < 1e-12:
+            if c > 0:
+                return False
+        else:
+            disc = b * b - 4.0 * a * c
+            if disc < 0:
+                return False
+            root = math.sqrt(disc)
+            enter = max(enter, (-b - root) / (2.0 * a))
+            leave = min(leave, (-b + root) / (2.0 * a))
+        center_z = solution.get("center_z", point[2])
+        low = center_z - height * 0.5 - projectile_radius
+        high = center_z + height * 0.5 + projectile_radius
+        if abs(vec[2]) < 1e-12:
+            if not low <= origin[2] <= high:
+                return False
+        else:
+            z_enter, z_leave = sorted(((low - origin[2]) / vec[2], (high - origin[2]) / vec[2]))
+            enter, leave = max(enter, z_enter), min(leave, z_leave)
+        if enter > leave or leave < 0 or not math.isfinite(enter):
+            return False
+        endpoint = [origin[i] + enter * vec[i] for i in range(3)]
+        return self._clear(origin, endpoint)
+
+    def _gun_fire_times(self, weapon, stats):
+        """All launch frames while one trigger command is held."""
+        reloading = max(0.0, float(weapon.get("reload", 0.0)))
+        next_at = max(0.0, float(weapon.get("cooldown", 0.0)), reloading)
+        ammo = int(stats.get("mag", 12) if reloading else weapon.get("ammo", 1))
+        cooldown = max(0.0, float(stats.get("cooldown", 0.24)))
+        for frame in range(1, max(1, round(self.action_dt / self.sim_dt)) + 1):
+            delay = frame * self.sim_dt
+            if ammo > 0 and delay + 1e-6 >= next_at:
+                yield delay
+                ammo -= 1
+                next_at = delay + cooldown
+
     def _direct_solution(self, kind, stats, origin, center, velocity, barrel_offset, limits, target_height):
         speed = float(stats.get("speed", 252.0))
         # All shots have a small muzzle extension. Re-solve the gun intercept
@@ -202,7 +262,7 @@ class Combat:
                 predicted, shot_origin, aim = alternate, alternate_origin, alternate_aim
                 distance, clear = alternate_distance, True
                 break
-        return {"aim": aim, "point": predicted, "origin": shot_origin,
+        return {"aim": aim, "point": predicted, "origin": shot_origin, "muzzle": origin,
                 "horizontal": math.dist(shot_origin[:2], predicted[:2]),
                 "distance": distance, "clear": clear, "flight": flight, "center_z": center_z}
 
@@ -368,8 +428,25 @@ class Combat:
             valid = bool(sol and sol["clear"])
             actual_next = self._slewed(actual, action["aim"], own, fire_delay[slot])
             if kind == "gun":
-                aligned = valid and self._aligned(actual_next, sol, radius, height,
+                aligned = valid
+                if aligned and ready[slot] and not action["reload"]:
+                    # Usually only one shot fits in the action. A faster live
+                    # cooldown can fire in both frames, each at a different aim
+                    # and target position; a single trigger must be safe for all.
+                    for delay in self._gun_fire_times(weapon, stats):
+                        shot = sol
+                        if abs(delay - fire_delay[slot]) > 1e-7:
+                            launch_target = [center[i] + velocity[i] * delay for i in range(3)]
+                            shot = self._direct_solution(kind, stats, origin, launch_target, velocity,
+                                                         own["radius"] + 0.5, limits, height)
+                        shot_aim = self._slewed(actual, action["aim"], own, delay)
+                        if not (shot and shot["clear"]
+                                and self._aligned(shot_aim, shot, radius, height,
                                                   self.config.get("projectile", {}).get("gun_radius", 0.3))
+                                and self._actual_ray_clear(shot_aim, shot, radius, height,
+                                                          self.config.get("projectile", {}).get("gun_radius", 0.3))):
+                            aligned = False
+                            break
                 reload_ending = 0 < weapon.get("reload", 0) <= self.action_dt + 1e-6
                 action["fire"][slot] = bool(ready[slot] and aligned and weapon.get("reload", 0) <= self.action_dt + 1e-6
                                              and (weapon.get("ammo", 1) > 0 or reload_ending) and not action["reload"])
@@ -378,7 +455,8 @@ class Combat:
             elif kind == "laser":
                 charge = float(weapon.get("charge", 0.0))
                 full = float(stats.get("charge", 0.75))
-                aligned = valid and self._aligned(actual_next, sol, radius, height)
+                aligned = (valid and self._aligned(actual_next, sol, radius, height)
+                           and (charge <= 0 or self._actual_ray_clear(actual_next, sol, radius, height)))
                 if charge >= full - 1e-6:
                     self._full_since.setdefault(slot, now)
                 else:

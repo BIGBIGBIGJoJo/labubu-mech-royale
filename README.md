@@ -17,6 +17,14 @@ python check/check.py --map-dir /arena -- docker run --rm -i --network none --cp
 ```
 
 On PowerShell, use `-v "${PWD}/arena:/arena:ro"` for the mount argument.
+Also run the checker **inside Linux**: the Windows checker resolves `/arena`
+to a Windows path, which can silently exercise the bot's map fallback. For
+example, after building the image from this repository, use PowerShell:
+
+```powershell
+docker run --rm --network none --cpus 1 --memory 512m --memory-swap 512m --pids-limit 128 --read-only --tmpfs /tmp:rw,size=64m --user 65534:65534 -v "${PWD}:/kit:ro" -v "${PWD}/arena:/arena:ro" --entrypoint python3 labubu-mech-royale /kit/check/check.py --map-dir /arena -- python3 -u /bot/bot.py
+```
+
 The checker replays recorded observations. Passing it confirms protocol
 conformance; it does **not** establish a gameplay score.
 
@@ -25,6 +33,9 @@ conformance; it does **not** establish a gameplay score.
 See [DESIGN.md](DESIGN.md) for the competition requirements, strategy,
 implementation plan, limits, and evaluation process.
 See [STRATEGY_V2.md](STRATEGY_V2.md) for the 6.3 target, evidence, and next design.
+The active target and component design are in [SCORE7_DESIGN.md](SCORE7_DESIGN.md).
+Current verified results and experiment status are in
+[SCORE7_EXPERIMENTS.md](SCORE7_EXPERIMENTS.md).
 
 - `bot.py`: strategy, recovery, upgrades, resource completion, and zone prediction.
 - `arena_map.py`: spatial index, terrain, solid geometry, bounded navigation.
