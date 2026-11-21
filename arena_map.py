@@ -12,6 +12,7 @@ import math
 from pathlib import Path
 import sys
 import time
+from terrain_kernel import make_kernel
 
 import navigation_cache
 
@@ -69,6 +70,7 @@ class ArenaMap:
     def __init__(self, map_dir, config, *, use_navigation_cache=True):
         self.available = False
         self.error = None
+        self._terrain_kernel = None
         self.prisms = []
         self.bins = {}
         self._walk_cache = {}
@@ -125,6 +127,7 @@ class ArenaMap:
             self.gx = int(math.ceil((self.bounds["maxX"] - self.bounds["minX"]) / self.GRID)) + 1
             self.gy = int(math.ceil((self.bounds["maxY"] - self.bounds["minY"]) / self.GRID)) + 1
             self.available = True
+            self._terrain_kernel = make_kernel(self)
             self._prepare_cover(float(mech.get("radius",2.5)),float(mech.get("height",9)))
         except (OSError, ValueError, KeyError, TypeError) as exc:
             self.error = f"{type(exc).__name__}: {exc}"
@@ -353,6 +356,11 @@ class ArenaMap:
                 mid=(a+b)*0.5
                 if self._solid(p,x+dx*mid,y+dy*mid):
                     return False
+        kernel=getattr(self,'_terrain_kernel',None)
+        if kernel is not None:
+            result=kernel.line_clear(self,start,end)
+            if result is not None:
+                return result
         cuts=self._terrain_cuts(start,end)
         for a,b in zip(cuts,cuts[1:]):
             if b-a<1e-10:
