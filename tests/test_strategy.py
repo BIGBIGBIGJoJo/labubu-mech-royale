@@ -9,6 +9,7 @@ import json
 import math
 from pathlib import Path
 import sys
+import time
 import unittest
 from unittest.mock import patch
 
@@ -107,6 +108,108 @@ class StrategyTests(unittest.TestCase):
     def test_low_hp_stops_shooting_to_allow_recovery(self):
         self.obs["self"]["hp"] = 500
         self.obs["mechs"] = [self.enemy()]
+        action = self.bot.act(self.obs)
+        self.assertTrue(self.bot.recover)
+        self.assertEqual(action["fire"], [False, False])
+
+    def test_recovery_defends_against_a_visible_mech_during_recent_damage(self):
+        self.obs["self"]["hp"] = 725
+        self.obs["mechs"] = [self.enemy(100, hp=500)]
+        self.obs["events"] = [{"type": "damaged", "amount": 45, "weapon": "gun", "bearing": 0, "by": 5}]
+        action = self.bot.act(self.obs)
+        self.assertTrue(self.bot.recover)
+        self.assertEqual(self.bot.mode, "recover", "Defensive fire must not cancel escape movement")
+        self.assertTrue(action["fire"][0])
+
+    def test_open_field_recovery_retreats_while_facing_attacker(self):
+        self.obs["self"]["hp"] = 500
+        self.obs["mechs"] = [self.enemy(80)]
+        self.obs["events"] = [{"type": "damaged", "amount": 45, "weapon": "gun", "bearing": 0, "by": 5}]
+        with patch.object(self.bot.map, "cover_candidates", return_value=[]):
+            action = self.bot.act(self.obs)
+        self.assertTrue(self.bot.recover)
+        self.assertLess(action["move"][0], -0.5,
+                        "No nearby cover must not mean standing still under fire")
+        self.assertAlmostEqual(action["aim"][0], 0.0, places=5)
+
+    def test_protected_quiet_recovery_stays_put_to_heal(self):
+        self.obs["self"]["hp"] = 500
+        self.obs["mechs"] = [self.enemy(80)]
+        with patch.object(self.bot.map, "cover_candidates", return_value=[]), \
+                patch.object(self.bot.map, "line_of_fire", return_value=False):
+            action = self.bot.act(self.obs)
+        self.assertTrue(self.bot.recover)
+        self.assertEqual(action["move"], [0.0, 0.0])
+        self.assertEqual(action["fire"], [False, False])
+
+    def test_recovery_stops_defensive_fire_after_quiet_window(self):
+        self.obs["self"]["hp"] = 725
+        self.obs["mechs"] = [self.enemy(100, hp=500)]
+        self.obs["events"] = [{"type": "damaged", "amount": 45, "weapon": "gun", "bearing": 0, "by": 5}]
+        self.bot.act(self.obs)
+        self.obs.update(t=23.1, tick=462, events=[])
+        action = self.bot.act(self.obs)
+        self.assertTrue(self.bot.recover)
+        self.assertEqual(action["fire"], [False, False])
+
+    def test_zone_damage_does_not_reset_recovery_defensive_fire_window(self):
+        self.obs["self"]["hp"] = 725
+        self.obs["mechs"] = [self.enemy(100, hp=500)]
+        self.obs["events"] = [{"type": "damaged", "amount": 20, "weapon": "zone", "bearing": None, "by": None}]
+        action = self.bot.act(self.obs)
+        self.assertTrue(self.bot.recover)
+        self.assertEqual(action["fire"], [False, False])
+
+    def test_faster_regeneration_shortens_defensive_fire_window(self):
+        self.obs["self"]["hp"] = 725
+        self.obs["self"]["stats"]["regen_delay"] = 2
+        self.obs["mechs"] = [self.enemy(100, hp=500)]
+        self.obs["events"] = [{"type": "damaged", "amount": 45, "weapon": "gun", "bearing": 0, "by": 5}]
+        self.bot.act(self.obs)
+        self.obs.update(t=22.1, tick=442, events=[])
+        action = self.bot.act(self.obs)
+        self.assertTrue(self.bot.recover)
+        self.assertEqual(action["fire"], [False, False])
+
+    def test_recent_damage_does_not_trigger_recovery_farming_on_npc(self):
+        self.obs["self"]["hp"] = 725
+        self.obs["mechs"] = [self.enemy(50, id=100, kind="npc", hp=350, max_hp=350)]
+        self.obs["events"] = [{"type": "damaged", "amount": 45, "weapon": "gun", "bearing": 0, "by": 5}]
+        action = self.bot.act(self.obs)
+        self.assertTrue(self.bot.recover)
+        self.assertEqual(action["fire"], [False, False])
+
+    def test_actual_npc_attacker_is_cleared_before_distant_mech(self):
+        self.obs["mechs"] = [self.enemy(150),
+                             self.enemy(45, id=100, kind="npc", hp=300, max_hp=350),
+                             self.enemy(55, id=101, kind="npc", hp=100, max_hp=350)]
+        self.obs["events"] = [{"type": "damaged", "amount": 25, "weapon": "npc", "bearing": 0, "by": attacker}
+                              for attacker in (100, 101)]
+        self.bot.update(self.obs)
+        target = self.bot.choose_target(self.obs, self.bot.threats(self.obs, self.bot.stats(self.obs["self"])))
+        self.assertEqual(target["id"], 101, "Finish the weaker actual NPC attacker first")
+
+    def test_immediate_mech_keeps_priority_over_actual_npc_attacker(self):
+        self.obs["mechs"] = [self.enemy(60), self.enemy(50, id=100, kind="npc", hp=350, max_hp=350)]
+        self.obs["events"] = [{"type": "damaged", "amount": 25, "weapon": "npc", "bearing": 0, "by": 100}]
+        self.bot.update(self.obs)
+        target = self.bot.choose_target(self.obs, self.bot.threats(self.obs, self.bot.stats(self.obs["self"])))
+        self.assertEqual(target["id"], 5)
+
+    def test_quiet_npc_does_not_distract_from_distant_mech(self):
+        self.obs["mechs"] = [self.enemy(150), self.enemy(50, id=100, kind="npc", hp=350, max_hp=350)]
+        self.bot.update(self.obs)
+        target = self.bot.choose_target(self.obs, self.bot.threats(self.obs, self.bot.stats(self.obs["self"])))
+        self.assertEqual(target["id"], 5)
+
+    def test_recovery_returns_fire_at_actual_npc_then_resumes_quiet_healing(self):
+        self.obs["self"]["hp"] = 725
+        self.obs["mechs"] = [self.enemy(150), self.enemy(50, id=100, kind="npc", hp=350, max_hp=350)]
+        self.obs["events"] = [{"type": "damaged", "amount": 25, "weapon": "npc", "bearing": 0, "by": 100}]
+        action = self.bot.act(self.obs)
+        self.assertTrue(self.bot.recover)
+        self.assertTrue(action["fire"][0])
+        self.obs.update(t=23.1, tick=462, events=[])
         action = self.bot.act(self.obs)
         self.assertTrue(self.bot.recover)
         self.assertEqual(action["fire"], [False, False])
@@ -222,6 +325,33 @@ class StrategyTests(unittest.TestCase):
         self.assertEqual(self.bot.mode, "engage")
         self.assertNotEqual(self.bot.telemetry["goal"], [0, 15, 0])
 
+    def test_approaching_lightning_carrier_causes_radial_boosted_retreat(self):
+        self.obs["mechs"] = [self.enemy(75, vel=[-11.7, 0, 0], weapons=["gun", "lightning"])]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.mode, "engage")
+        self.assertFalse(self.bot.recover)
+        self.assertLess(action["move"][0], -0.9)
+        self.assertLess(abs(action["move"][1]), 0.25,
+                        "Do not sacrifice escape speed to fixed tangential strafing")
+        self.assertTrue(action["boost"])
+
+    def test_spacing_boost_preserves_energy_floor(self):
+        self.obs["mechs"] = [self.enemy(75, vel=[-11.7, 0, 0], weapons=["gun", "lightning"])]
+        for energy in (35, 20, 0):
+            with self.subTest(energy=energy):
+                self.obs["self"]["energy"] = energy
+                action = self.bot.act(self.obs)
+                self.assertLess(action["move"][0], -0.9)
+                self.assertFalse(action["boost"])
+
+    def test_stationary_enemy_at_preferred_distance_keeps_strafe(self):
+        self.obs["mechs"] = [self.enemy(70, vel=[0, 0, 0])]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.mode, "engage")
+        self.assertLess(abs(action["move"][0]), 0.1)
+        self.assertGreater(abs(action["move"][1]), 0.9)
+        self.assertFalse(action["boost"])
+
     def test_pickup_requires_vertical_and_horizontal_reach(self):
         self.obs["pickups"] = [{"id": 8001, "kind": "laser", "pos": [1, 0, 5]}]
         self.assertEqual(self.bot.take_weapon(self.obs), {})
@@ -269,6 +399,18 @@ class StrategyTests(unittest.TestCase):
         before = copy.deepcopy(self.obs)
         self.bot.act(self.obs)
         self.assertEqual(self.obs, before)
+
+    def test_expired_tactical_budget_keeps_clear_navigation(self):
+        move, boost = self.bot.movement(self.obs, (1, 0), [], self.bot.stats(self.obs["self"]),
+                                       False, time.perf_counter() - 1)
+        self.assertGreater(move[0], 0.9,
+                           "Exhausting tactical search time must not erase a safe navigation direction")
+
+    def test_expired_tactical_budget_does_not_walk_into_obstruction(self):
+        with patch.object(self.bot.map, "move_clear", return_value=False):
+            move, boost = self.bot.movement(self.obs, (1, 0), [], self.bot.stats(self.obs["self"]),
+                                           False, time.perf_counter() - 1)
+        self.assertEqual(tuple(move), (0, 0))
 
 
 if __name__ == "__main__":

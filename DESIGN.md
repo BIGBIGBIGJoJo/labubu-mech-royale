@@ -75,6 +75,11 @@ The controller must suppress opportunistic fire while healing, including crate
 shots. Move away while facing the attacker to reduce rear-hit damage. Health
 thresholds have hysteresis so the bot does not switch states every tick.
 
+Retreat and healing are separate phases. While incoming weapon hits continue,
+defensive fire can finish a pursuer; suppress it after contact breaks so recovery
+can actually start. A recent attacking drone gets priority over distant mechs
+when there is no immediate mech threat. Its low HP makes clearing it practical.
+
 ## 4. Architecture
 
 ```mermaid
@@ -105,6 +110,12 @@ Cache goals briefly, invalidate unsafe goals, and detect failure to move. Avoid
 unbounded replanning and repeated attempts to collect unreachable roof loot.
 Ground navigation is the first release's priority. General roof/jet navigation
 requires additional physics validation and is not claimed as implemented.
+
+Precompute spatially diverse cover points during initialization, then keep the
+candidate-generation and candidate-scoring budgets separate. In an open field,
+consider explicit retreat points and distance-sensitive exposure cost. During
+combat, match the enemy's radial velocity before allocating remaining movement
+to strafing; fixed strafing can otherwise make retreat slower than pursuit.
 
 ### Zone prediction
 

@@ -86,6 +86,21 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(action["fire"], [False, False])
         self.assertTrue(action["reload"])
 
+    def test_low_health_retreat_can_fire_gun_without_new_laser_charge(self):
+        obs = observation(weapon("gun"), weapon("laser"))
+        obs["self"]["hp"] = 500
+        action = combat.Combat(CONFIG).plan(obs, enemy(70), allow_fire=True, emergency=True)
+        self.assertTrue(action["fire"][0])
+        self.assertFalse(action["fire"][1])
+
+    def test_quiet_recovery_suppresses_even_a_wounded_target(self):
+        obs = observation(weapon("gun"))
+        obs["self"]["hp"] = 500
+        target = enemy(70)
+        target["hp"] = 400
+        action = combat.Combat(CONFIG).plan(obs, target, allow_fire=False, emergency=True)
+        self.assertEqual(action["fire"], [False, False])
+
     def test_laser_charges_then_releases_at_full(self):
         controller = combat.Combat(CONFIG)
         obs = observation(weapon("laser"))

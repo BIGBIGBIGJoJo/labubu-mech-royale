@@ -75,6 +75,9 @@ class ArenaMap:
         self._path = []
         self._path_key = None
         self._cover = []
+        self._cover_bins = {}
+        self._cover_dims = None
+        self._cover_dynamic = {}
         self._cover_cache = None
         mech = config.get("mech", {})
         self.step_up = float(mech.get("step_up", 1.2))
@@ -116,8 +119,38 @@ class ArenaMap:
             self.gx = int(math.ceil((self.bounds["maxX"] - self.bounds["minX"]) / self.GRID)) + 1
             self.gy = int(math.ceil((self.bounds["maxY"] - self.bounds["minY"]) / self.GRID)) + 1
             self.available = True
+            self._prepare_cover(float(mech.get("radius",2.5)),float(mech.get("height",9)))
         except (OSError, ValueError, KeyError, TypeError) as exc:
             self.error = f"{type(exc).__name__}: {exc}"
+
+    def _prepare_cover(self,radius,height):
+        """Build valid wall-adjacent points once, outside the decision budget."""
+        self._cover_base_radius=radius
+        self._cover_base_height=height
+        seen=set()
+        for prism in self.prisms:
+            for ax,ay,bx,by in prism["edges"]:
+                dx,dy=bx-ax,by-ay
+                length=math.hypot(dx,dy)
+                if length<0.4:
+                    continue
+                nx,ny=-dy/length,dx/length
+                for px,py in ((ax,ay),(bx,by),((ax+bx)*0.5,(ay+by)*0.5)):
+                    for sign in (-1,1):
+                        ux,uy=sign*nx,sign*ny
+                        x,y=px+ux*(radius+2),py+uy*(radius+2)
+                        key=(round(x/2.5),round(y/2.5))
+                        if key in seen:
+                            continue
+                        # Mark after checking validity, so an interior candidate
+                        # cannot suppress a nearby usable exterior one.
+                        z=self.ground_height(x,y)
+                        if prism["top"]<z+height*0.6 or not self.point_clear((x,y,z),radius,height):
+                            continue
+                        seen.add(key)
+                        index=len(self._cover)
+                        self._cover.append((x,y,z,ux,uy,prism["top"]))
+                        self._cover_bins.setdefault((math.floor(x/self.BIN),math.floor(y/self.BIN)),[]).append(index)
 
     def ground_height(self, x, y):
         if not self.available:
@@ -468,55 +501,63 @@ class ArenaMap:
         return self._local_steer(pos,goal,radius,height,deadline)
 
     def cover_candidates(self,pos,zone_center,zone_radius,radius=2.5,height=9.0,limit=16,deadline=None):
-        """Nearby wall-corner/edge positions inside the supplied safe circle.
+        """At most twelve spatially diverse wall-adjacent ground positions.
 
         These are geometry candidates, not guaranteed protection from a particular
-        enemy. The tactical controller should score incoming line of fire itself.
+        enemy. Cached geometry keeps generation within a three-millisecond target;
+        the tactical controller should reserve additional time to score protection.
         """
         if not self.available or limit<=0:
             return []
-        if deadline is None:
-            deadline=time.perf_counter()+0.007
-        if time.perf_counter()>=deadline:
+        now=time.perf_counter()
+        deadline=min(deadline if deadline is not None else now+0.003,now+0.003)
+        if now>=deadline:
             return []
+        limit=min(limit,12)
         reach=min(150.0,max(40.0,zone_radius))
-        candidates=[]
-        seen=set()
-        indices=self._candidates(pos[0]-reach,pos[1]-reach,pos[0]+reach,pos[1]+reach)
-        def box_distance(index):
-            x0,y0,x1,y1=self.prisms[index]["box"]
-            return max(x0-pos[0],0,pos[0]-x1)**2+max(y0-pos[1],0,pos[1]-y1)**2
-        for index in sorted(indices,key=box_distance)[:12]:
-            if time.perf_counter()>=deadline-0.0015:
-                break
-            prism=self.prisms[index]
-            for ax,ay,bx,by in prism["edges"]:
-                dx,dy=bx-ax,by-ay
-                length=math.hypot(dx,dy)
-                if length<0.1:
-                    continue
-                nx,ny=-dy/length,dx/length
-                # Sampling both sides handles clockwise rings and courtyard holes.
-                points=((ax,ay),(bx,by),((ax+bx)*0.5,(ay+by)*0.5))
-                for px,py in points:
-                    for sign in (-1,1):
-                        x,y=px+sign*nx*(radius+2.0),py+sign*ny*(radius+2.0)
-                        cell=(round(x/3),round(y/3))
-                        if cell in seen:
-                            continue
-                        seen.add(cell)
-                        distance=math.hypot(x-pos[0],y-pos[1])
-                        if distance>reach or math.hypot(x-zone_center[0],y-zone_center[1])+radius+2>zone_radius:
-                            continue
-                        candidates.append((distance,(x,y),prism["top"]))
-        candidates.sort(key=lambda item:item[0])
+        shift=radius-self._cover_base_radius
+        buckets=[[] for _ in range(8)]
+        for ix in range(math.floor((pos[0]-reach-abs(shift))/self.BIN),math.floor((pos[0]+reach+abs(shift))/self.BIN)+1):
+            for iy in range(math.floor((pos[1]-reach-abs(shift))/self.BIN),math.floor((pos[1]+reach+abs(shift))/self.BIN)+1):
+                for index in self._cover_bins.get((ix,iy),()):
+                    x,y,z,nx,ny,top=self._cover[index]
+                    x,y=x+nx*shift,y+ny*shift
+                    dx,dy=x-pos[0],y-pos[1]
+                    distance=math.hypot(dx,dy)
+                    if not (4<distance<=reach) or math.hypot(x-zone_center[0],y-zone_center[1])+radius+2>zone_radius:
+                        continue
+                    sector=int((math.atan2(dy,dx)+math.pi)/(math.pi/4))%8
+                    buckets[sector].append((distance,index,x,y,z,top))
+        for bucket in buckets:
+            bucket.sort(reverse=True)
+        dims=(radius,height)
+        if dims!=self._cover_dims:
+            self._cover_dynamic.clear()
+            self._cover_dims=dims
+        base_dims=abs(shift)<1e-8 and abs(height-self._cover_base_height)<1e-8
         selected=[]
-        for _,(x,y),top in candidates[:400]:
+        sectors=[0]*8
+        attempts=0
+        while len(selected)<limit and attempts<128:
             if time.perf_counter()>=deadline:
                 break
-            z=self.ground_height(x,y)
-            if top>=z+height*0.6 and self.point_clear((x,y,z),radius,height):
-                selected.append((x,y,z))
-                if len(selected)>=limit:
-                    break
+            available=[i for i in range(8) if buckets[i]]
+            if not available:
+                break
+            sector=min(available,key=lambda i:buckets[i][-1][0]+8*sectors[i])
+            _,index,x,y,z,top=buckets[sector].pop()
+            attempts+=1
+            if any((x-a)**2+(y-b)**2<49 for a,b,_ in selected):
+                continue
+            if not base_dims:
+                point=self._cover_dynamic.get(index)
+                if point is None:
+                    z=self.ground_height(x,y)
+                    point=(x,y,z) if top>=z+height*0.6 and self.point_clear((x,y,z),radius,height) else False
+                    self._cover_dynamic[index]=point
+                if point is False:
+                    continue
+                x,y,z=point
+            selected.append((x,y,z))
+            sectors[sector]+=1
         return selected

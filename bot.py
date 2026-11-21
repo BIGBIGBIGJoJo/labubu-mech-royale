@@ -37,6 +37,7 @@ class Bot:
         self.goal_until = -1.0
         self.goal_kind = ""
         self.last_hurt = -100.0
+        self.last_weapon_hurt = -100.0
         self.last_combat = -100.0
         self.damage_bearing = None
         self.last_jump = -100.0
@@ -49,6 +50,8 @@ class Bot:
         self.telemetry = {}
         self.visited = {}
         self.visit_t = -1
+        self.spacing_boost = False
+        self.recent_attackers = {}
 
     def stats(self, me):
         return {**self.config["mech"], **me.get("stats", {})}
@@ -76,6 +79,10 @@ class Bot:
                 self.last_combat = t
             if event["type"] == "damaged":
                 self.last_hurt = t
+                if event.get("weapon") != "zone":
+                    self.last_weapon_hurt = t
+                    if event.get("by") is not None:
+                        self.recent_attackers[event["by"]] = t
                 if event.get("bearing") is not None:
                     self.damage_bearing = event["bearing"]
             if event["type"] in ("took", "take_failed"):
@@ -98,6 +105,7 @@ class Bot:
                 if t - seen > 45 or absent_near:
                     self.loot.pop(key, None)
         self.blacklist = {k: until for k, until in self.blacklist.items() if until > t}
+        self.recent_attackers = {k: seen for k, seen in self.recent_attackers.items() if t - seen < 5}
 
     def actor_center(self, actor):
         if actor.get("kind") == "npc":
@@ -136,6 +144,11 @@ class Bot:
         targets = [q for q in threats if q["los"] and q["d"] < ranged]
         if not targets:
             return None
+        close_mech = any(q["actor"]["kind"] == "mech" and q["d"] < 90 for q in targets)
+        attacking_npcs = [q for q in targets if q["actor"]["kind"] == "npc" and q["d"] <= 60 and obs["t"] - self.recent_attackers.get(q["actor"]["id"], -100) < 3]
+        if attacking_npcs and not close_mech:
+            # Clear an actual nearby attacker before trading shots at distant mechs.
+            return min(attacking_npcs, key=lambda q: (q["actor"].get("hp", 350), q["d"]))["actor"]
         def value(q):
             a = q["actor"]
             hp = a.get("hp", a.get("max_hp", 1400))
@@ -199,6 +212,9 @@ class Bot:
             if d < 260 and self.map.line_of_fire(origin, self.actor_center(actor)):
                 score += q["risk"] * (55 if recovering else 16)
                 score += max(0, 65 - d) * (1.3 if recovering else .35)
+                if recovering:
+                    reach = max((self.config["weapons"].get(kind, {}).get("range", 230) for kind in actor.get("weapons", ["gun"])), default=230)
+                    score += q["risk"] * 90 * max(0, 1 - d / max(1, reach))
         return score
 
     def safe_goal(self, obs, threats, s, deadline):
@@ -220,7 +236,21 @@ class Bot:
                 options.append((score, point))
             if options:
                 return min(options, key=lambda item: item[0])[1]
-        candidates = self.map.cover_candidates(p, center, radius, s["radius"], s["height"], limit=22, deadline=deadline)
+        generation_deadline = min(deadline - .004, time.perf_counter() + .003)
+        candidates = self.map.cover_candidates(p, center, radius, s["radius"], s["height"], limit=12, deadline=generation_deadline)
+        if self.recover and threats:
+            vx = sum((p[0] - q["actor"]["pos"][0]) * q["risk"] / max(100, q["d"] ** 2) for q in threats[:5])
+            vy = sum((p[1] - q["actor"]["pos"][1]) * q["risk"] / max(100, q["d"] ** 2) for q in threats[:5])
+            if math.hypot(vx, vy) < .001:
+                vx, vy = p[0] - threats[0]["actor"]["pos"][0], p[1] - threats[0]["actor"]["pos"][1]
+            away = math.atan2(vy, vx)
+            retreats = []
+            for angle in (away, away + .7, away - .7):
+                point = [p[0] + 40 * math.cos(angle), p[1] + 40 * math.sin(angle), 0]
+                point[2] = self.map.ground_height(*point[:2])
+                if distance(point, center) + s["radius"] + 6 < radius and self.map.point_clear(point, s["radius"], s["height"]):
+                    retreats.append(point)
+            candidates = list(candidates) + retreats
         # The origin is also a useful candidate when already behind effective cover.
         candidates = [list(p)] + list(candidates)
         if not candidates:
@@ -293,7 +323,7 @@ class Bot:
         me, t = obs["self"], obs["t"]
         p = me["pos"]
         speed = s["walk_speed"]
-        boost = me["energy"] > (12 if urgent else 35) and (urgent or (self.recover and any(q["los"] for q in threats)))
+        boost = me["energy"] > (12 if urgent else 35) and (urgent or self.spacing_boost or (self.recover and any(q["los"] for q in threats)))
         if boost:
             speed = s["boost_speed"]
         angles = [math.atan2(navigation[1], navigation[0]) + offset for offset in (0, .35, -.35, .7, -.7, 1.1, -1.1, 1.57, -1.57, 2.2, -2.2, math.pi)]
@@ -306,9 +336,11 @@ class Bot:
         projectiles = sorted(obs.get("projectiles", []), key=lambda q: distance(q["pos"], p))[:16]
         best, best_score = navigation, float("inf")
         found = False
+        tested = 0
         for dx, dy in directions:
             if time.perf_counter() > deadline:
                 break
+            tested += 1
             endpoint = [p[0] + dx * speed * .48, p[1] + dy * speed * .48, p[2]]
             if (dx or dy) and not self.map.move_clear(p, endpoint, s["radius"], s["height"]):
                 continue
@@ -342,12 +374,18 @@ class Bot:
                         score += max(0, s["radius"] + 3 - miss) * 9
             if score < best_score:
                 best, best_score = (dx, dy), score
+        if tested == 0 and math.hypot(*navigation) > .1:
+            # Keep a collision-checked route when the optional dodge search expires.
+            endpoint = [p[0] + navigation[0] * speed * .25, p[1] + navigation[1] * speed * .25, p[2]]
+            if self.map.move_clear(p, endpoint, s["radius"], s["height"]):
+                return navigation, boost
         return (best if found else (0.0, 0.0)), boost
 
     def act(self, obs):
         start = time.perf_counter()
         deadline = start + .026
         me, t = obs["self"], obs["t"]
+        self.spacing_boost = False
         self.update(obs)
         s = self.stats(me)
         threats = self.threats(obs, s)
@@ -399,6 +437,8 @@ class Bot:
             d = distance(p, q["pos"])
             held = {w["kind"] for w in me["weapons"] if w}
             preferred = 100 if "laser" in held else 70
+            if q.get("kind") == "npc":
+                preferred = 35
             if "lightning" in held and "laser" in q.get("weapons", []) and hp > .7:
                 preferred = 33
             if len(visible) >= 2:
@@ -406,11 +446,17 @@ class Bot:
             if "lightning" in q.get("weapons", []) and "lightning" not in held:
                 preferred = max(80, preferred)
             ux, uy = unit(q["pos"][0] - p[0], q["pos"][1] - p[1])
-            radial = clamp((d - preferred) / 25, -1, 1)
+            # Match an approaching enemy's radial velocity before adding strafe.
+            # Fixed strafing otherwise makes retreat slower than its pursuit.
+            velocity = q.get("vel", [0, 0, 0])
+            closing_velocity = velocity[0] * ux + velocity[1] * uy
+            radial = clamp((closing_velocity + .6 * (d - preferred)) / s["walk_speed"], -1, 1)
+            self.spacing_boost = radial < -.92 and d < preferred + 8
+            tangent = .8 * math.sqrt(max(0, 1 - radial * radial))
             if t - self.last_strafe > 2.8:
                 self.strafe *= -1
                 self.last_strafe = t
-            dx, dy = unit(ux * radial - uy * .75 * self.strafe, uy * radial + ux * .75 * self.strafe)
+            dx, dy = unit(ux * radial - uy * tangent * self.strafe, uy * radial + ux * tangent * self.strafe)
             goal = [p[0] + dx * 20, p[1] + dy * 20, p[2]]
         navigation = self.map.navigate(p, goal, s["radius"], s["height"], deadline=deadline - .006)
         if distance(p, goal) < 1.5:
@@ -425,7 +471,11 @@ class Bot:
             if me["grounded"] and me["energy"] > 40 and t - self.last_jump > 3:
                 jump, self.last_jump = True, t
         imminent = any(q["los"] and q["d"] < 28 for q in threats)
-        allow_fire = not self.recover or imminent
+        active_contact = target is not None and target.get("kind") == "mech" and t - self.last_weapon_hurt < min(3.0, s["regen_delay"])
+        active_contact = active_contact and any(q["actor"]["id"] == target["id"] and q["los"] for q in threats)
+        if target is not None and target.get("kind") == "npc":
+            active_contact = t - self.recent_attackers.get(target["id"], -100) < min(3.0, s["regen_delay"]) and not any(q["actor"]["kind"] == "mech" and q["los"] and q["d"] < 90 for q in threats)
+        allow_fire = not self.recover or imminent or active_contact
         combat = self.combat.plan(obs, target, allow_fire=allow_fire, emergency=urgent or self.recover)
         if target is None or not allow_fire:
             # Turn toward received fire, otherwise scan instead of staring at the destination.

@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -102,6 +103,33 @@ class GeometryTests(unittest.TestCase):
         self.assertTrue(terrain._traversable(high, low, dims))
         self.assertFalse(terrain._traversable(low, high, dims))
         self.assertTrue(terrain._traversable(high, low, dims))
+
+    def test_cover_candidates_are_separated_and_clear(self):
+        with patch.object(geometry.time, "perf_counter", return_value=100.0):
+            candidates=self.map.cover_candidates((19,20,0),(20,20),40,1,9,22,deadline=101.0)
+        self.assertTrue(candidates)
+        self.assertLessEqual(len(candidates),12)
+        for i,point in enumerate(candidates):
+            self.assertTrue(self.map.point_clear(point,1,9))
+            for previous in candidates[:i]:
+                self.assertGreaterEqual((point[0]-previous[0])**2+(point[1]-previous[1])**2,49)
+
+
+class RecordedCoverRegression(unittest.TestCase):
+    """A recorded gameplay position once exhausted the cover scoring budget."""
+    def test_diverse_shortlist_includes_nearby_protected_position(self):
+        arena=ROOT / "arena"
+        if not (arena / "v2/world.json").exists():
+            self.skipTest("Bundled official arena is unavailable")
+        world=geometry.ArenaMap(arena,{"mech":{"radius":2.5,"height":9,"step_up":1.2,"max_slope_deg":50}})
+        self.assertTrue(world.available,world.error)
+        pos=(-33.4,-301.67,-1.03)
+        enemy=(10.87,-303.09,-1.02+4.5)
+        with patch.object(geometry.time,"perf_counter",return_value=100.0):
+            candidates=world.cover_candidates(pos,(-27.41,-140.58),380,2.5,9,12,deadline=101.0)
+        protected=[p for p in candidates if (p[0]-pos[0])**2+(p[1]-pos[1])**2<35**2
+                   and not world.line_of_fire((p[0],p[1],p[2]+7),enemy)]
+        self.assertTrue(protected,"Shortlist must include the reachable-around-building protected side")
 
 
 if __name__ == "__main__":
