@@ -9,6 +9,7 @@ import mechfight as mf
 from arena_map import ArenaMap
 from combat import Combat
 from tactical import TacticalPlanner
+from zone_resource import ZoneResourcePlanner
 from ground_reachability import GroundReachability, NO, YES
 
 
@@ -35,6 +36,7 @@ class Bot:
         self.ground_goal_pending = False
         self.combat = Combat(self.config, self.map.line_of_fire)
         self.tactical = TacticalPlanner(self.config, self.map)
+        self.zone_resources = ZoneResourcePlanner(self.config, self.map)
         self.slot = hello["slot"]
         self.recover = False
         self.mode = "explore"
@@ -339,7 +341,7 @@ class Bot:
             best = [center[0] + r * u[0], center[1] + r * u[1], self.map.ground_height(center[0] + r * u[0], center[1] + r * u[1])]
         return best
 
-    def resource_goal(self, obs, threats, deadline=None):
+    def resource_goal(self, obs, threats, deadline=None, only_key=None):
         """Price completion time and exposure for each reachable opportunity."""
         me, t = obs["self"], obs["t"]
         p, stats = me["pos"], self.stats(me)
@@ -389,6 +391,8 @@ class Bot:
             return distance(point, center) + stats["radius"] + 8 < radius
 
         def add(item, kind, key, benefit, seen=t, dwell=0, farming=False):
+            if only_key is not None and key != only_key:
+                return
             point = list(item["pos"])
             travel = distance(p, point)
             eta = max(0, travel - pickup_r) / speed + dwell
@@ -412,6 +416,8 @@ class Bot:
             if deadline is not None and time.perf_counter() >= deadline:
                 break
             if key in self.blacklist:
+                continue
+            if only_key is not None and key != only_key:
                 continue
             kind = key[0]
             if kind == "cubes":
@@ -472,6 +478,8 @@ class Bot:
             if deadline is not None and time.perf_counter() >= deadline:
                 break
             key = ("drop", drop["id"])
+            if only_key is not None and key != only_key:
+                continue
             if key in self.blacklist:
                 continue
             point = list(drop["pos"])
@@ -561,10 +569,41 @@ class Bot:
                         abs(p[2] - self.map.ground_height(*p[:2])) <= self.map.step_up + .02)
         if self.ground_routes.index is not None and not ground_scope:
             self.ground_goal_pending = True
-        urgent = not me["in_zone"] or distance(p, center) + s["radius"] + 8 > future_radius
-        resource = self.resource_goal(obs, threats, deadline=min(deadline - .017, time.perf_counter() + .004)) if not urgent else None
+        urgent = self.zone_resources.rotation_required(obs, s)
+        resource, lease = None, None
+        had_lease = self.zone_resources.lease_key is not None
+        resource_deadline = min(deadline - .021, time.perf_counter() + .004)
+        lease_deadline = deadline - .018  # Reserve navigation and tactical work.
+        if had_lease:
+            collected = self.zone_resources.collection_observed(obs, s)
+            if not self.recover and not self.zone_resources.exiting and not collected:
+                resource = self.resource_goal(obs, threats, deadline=resource_deadline,
+                                              only_key=self.zone_resources.lease_key)
+            eligible = not self.recover and (resource is not None or collected or self.zone_resources.exiting)
+            lease = self.zone_resources.continue_lease(obs, s, eligible=eligible, deadline=lease_deadline)
+            if lease is None:
+                self.goal_until = -1  # A rejected exit must not survive as a held rotation goal.
+        if lease is None:
+            if not urgent:
+                resource = self.resource_goal(obs, threats, deadline=min(deadline - .017, time.perf_counter() + .004))
+            elif (not had_lease and not self.recover and me["grounded"] and me["in_zone"]
+                  and (obs.get("cubes") or obs.get("pickups"))
+                  and not any(w and w["kind"] == "laser" and w.get("charge", 0) > 0 for w in me["weapons"])):
+                resource = self.resource_goal(obs, threats, deadline=resource_deadline)
+                lease = self.zone_resources.start_lease(obs, resource, s, deadline=lease_deadline)
+            if urgent and lease is None:
+                resource = None
+        if lease is not None:
+            # A lease is proved at uncharged walk speed and grown body size.
+            # Keep ordinary combat target selection; emergency suppresses new
+            # laser holds. Already-active charges never pass lease admission.
+            urgent = True
+            if lease["phase"] == "exit":
+                resource = None
         self.resource_key = resource[3] if resource else None
-        if urgent:
+        if lease is not None:
+            self.mode = "loot" if lease["phase"] == "collect" else "rotate"
+        elif urgent:
             self.mode = "rotate"
         elif resource:
             self.mode = "loot"
@@ -572,7 +611,10 @@ class Bot:
             self.mode = "recover"
         else:
             self.mode = "engage" if target else "position"
-        if urgent or (self.recover and not resource) or (not target and not resource):
+        if lease is not None:
+            goal = lease["goal"]
+            self.goal, self.goal_kind = goal, self.mode
+        elif urgent or (self.recover and not resource) or (not target and not resource):
             refresh_goal = (self.goal is None or t >= self.goal_until or
                             self.goal_kind != self.mode or distance(self.goal, center) > future_radius)
             if not refresh_goal and ground_scope and self.ground_goal_pending:
@@ -643,21 +685,26 @@ class Bot:
             active_contact = t - self.recent_attackers.get(target["id"], -100) < min(3.0, s["regen_delay"]) and not any(q["actor"]["kind"] == "mech" and q["los"] and q["d"] < 90 for q in threats)
         allow_fire = not self.recover or imminent or active_contact
         combat = self.combat.plan(obs, target, allow_fire=allow_fire, emergency=urgent or self.recover)
-        navigation = self.map.navigate(p, goal, s["radius"], s["height"], deadline=deadline - .012)
+        motion_stats = {**s, "radius": max(s["radius"], lease["radius"]),
+                        "height": max(s["height"], lease["height"])} if lease is not None else s
+        navigation = self.map.navigate(p, goal, motion_stats["radius"], motion_stats["height"], deadline=deadline - .012)
         if distance(p, goal) < 1.5:
             navigation = (0, 0)
         motion_weapons = [({**w, "charge": max(.001, w.get("charge", 0)) if combat["fire"][i] else 0}
                            if w and w["kind"] == "laser" else w)
                           for i, w in enumerate(me["weapons"])]
         motion_obs = {**obs, "self": {**me, "weapons": motion_weapons}}
-        move, boost = self.movement(motion_obs, navigation, threats, s, urgent, deadline, goal)
+        move, boost = self.movement(motion_obs, navigation, threats, motion_stats, urgent, deadline, goal)
         stuck = bool(len(self.history) > 8 and t - self.history[0][0] > 1.3 and distance(p, self.history[0][1]) < 1.3 and sum(h[2] for h in self.history) > len(self.history) * .6)
         jump = False
         if stuck:
             if resource:
                 self.blacklist[resource[3]] = t + 12
             self.goal_until = -1
-            if me["grounded"] and me["energy"] > 40 and t - self.last_jump > 3:
+            if lease is not None:
+                self.zone_resources.cancel("stuck", t)
+                move, boost = (0.0, 0.0), False
+            elif me["grounded"] and me["energy"] > 40 and t - self.last_jump > 3:
                 jump, self.last_jump = True, t
         if target is None or not allow_fire:
             # Turn toward received fire, otherwise scan instead of staring at the destination.
@@ -682,6 +729,7 @@ class Bot:
         self.telemetry = {"mode": self.mode, "goal": goal, "resource": self.resource_key,
                           "target": target.get("id") if target else None,
                           "recover": self.recover, "threats": len(visible), "stuck": stuck,
+                          "zone_resource": {**self.zone_resources.last_report, "active": self.zone_resources.lease_key is not None},
                           "tactical": self.tactical.last_report, "ms": (time.perf_counter() - start) * 1000}
         return action
 
