@@ -1,6 +1,9 @@
 # Strategy v4: preserve earned advantages
 
-The verified best is 4.75; the target remains 6.3. This iteration focuses on
+Historical plan, superseded by [the current three-agent plan](AGENT_STRATEGY_PLAN.md)
+and its user-confirmed **6.0** target and engagement rules.
+
+At this experiment's start, the verified best was 4.75 and the target was 6.3. It focused on
 specific losses observed in diagnostics and documented weapon geometry.
 
 1. **Remember contested resources.** An enemy disappearing from the observation

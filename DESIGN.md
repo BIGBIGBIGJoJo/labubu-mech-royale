@@ -4,6 +4,10 @@ Prepared November 21, 2026 for team **labubu**. Requirements below were checked
 against the official event page, track page, full protocol, and downloaded kit.
 Strategy recommendations are hypotheses to evaluate, not a promised winning score.
 
+The current user-confirmed strategy and 6.0 score objective are in
+[AGENT_STRATEGY_PLAN.md](AGENT_STRATEGY_PLAN.md). This document retains the original
+requirements and development plan.
+
 ## 1. Objective and requirements
 
 The objective is to maximize mean `16 - placement`, between 0 and 15. Kills give

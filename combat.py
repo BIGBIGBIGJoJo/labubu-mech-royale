@@ -345,7 +345,136 @@ class Combat:
                 "horizontal": math.dist(launch[:2], point[:2]),
                 "distance": math.dist(launch, point), "clear": True, "flight": flight}
 
-    def plan(self, obs, target, allow_fire=True, emergency=False):
+    def _body_hit_time(self, launch, velocity, gravity, duration, actor, delay, padding=0.0, moving=True):
+        """First cylinder contact for a straight or ballistic projectile."""
+        radius, height = self._body(actor)
+        av = actor.get("vel", (0, 0, 0))
+        feet = [actor["pos"][i] + av[i] * delay for i in range(3)]
+        relative = [launch[i] - feet[i] for i in range(3)]
+        speed = [velocity[i] - (av[i] if moving else 0) for i in range(3)]
+        a = speed[0] ** 2 + speed[1] ** 2
+        b = 2 * (relative[0] * speed[0] + relative[1] * speed[1])
+        c = relative[0] ** 2 + relative[1] ** 2 - (radius + padding) ** 2
+        lo, hi = 0.0, duration
+        if a < 1e-10:
+            if c > 0:
+                return None
+        else:
+            disc = b * b - 4 * a * c
+            if disc < 0:
+                return None
+            root = math.sqrt(disc)
+            lo, hi = max(lo, (-b - root) / (2 * a)), min(hi, (-b + root) / (2 * a))
+            if lo > hi:
+                return None
+        z = relative[2] + speed[2] * lo - 0.5 * gravity * lo * lo
+        if -padding <= z <= height + padding:
+            return lo
+        contacts = []
+        for level in (-padding, height + padding):
+            if abs(gravity) < 1e-10:
+                roots = [(level - relative[2]) / speed[2]] if abs(speed[2]) > 1e-10 else []
+            else:
+                disc = speed[2] ** 2 + 2 * gravity * (relative[2] - level)
+                roots = [(speed[2] - math.sqrt(disc)) / gravity,
+                         (speed[2] + math.sqrt(disc)) / gravity] if disc >= 0 else []
+            contacts.extend(t for t in roots if lo - 1e-8 <= t <= hi + 1e-8)
+        return min(contacts) if contacts else None
+
+    def collateral_clear(self, obs, target, kind, stats, muzzle, aim, delay, solution, protected_ids=None):
+        """Conservative known-mech interception guard, shared with eligibility.
+
+        None preserves the original controller. This uses current observed
+        bodies and constant velocity, not unseen actors or a random spread seed.
+        An already charging laser still has the protocol's unavoidable release.
+        """
+        if not protected_ids:
+            return True
+        protected = [a for a in obs.get("mechs", ())
+                     if a.get("kind") == "mech" and a.get("id") in protected_ids and a.get("hp", 1) > 0]
+        if not protected:
+            return True
+        own = self._self_stats(obs["self"])
+        vec = direction(aim)
+        launch = [muzzle[i] + (own["radius"] + 0.5) * vec[i] for i in range(3)]
+        if kind in ("gun", "laser"):
+            moving = kind == "gun"
+            speed = stats.get("speed", 252.0) if moving else 1.0
+            velocity = [v * speed for v in vec]
+            duration = stats.get("range", 230 if moving else 280) / max(speed, 1e-8)
+            padding = self.config.get("projectile", {}).get("gun_radius", 0.3) if moving else 0.0
+            target_hit = self._body_hit_time(launch, velocity, 0, duration, target, delay, padding, moving)
+            if target_hit is not None and not (kind == "laser" and stats.get("pierce", 0) > 0):
+                duration = target_hit
+            for actor in protected:
+                # Gaussian spread is unbounded. Three configured spread widths
+                # are a conservative corridor, not a promise of zero randomness.
+                spread = math.tan(math.radians(3 * stats.get("spread_deg", 0))) if moving else 0
+                margin = padding + math.dist(launch, actor["pos"]) * spread
+                if self._body_hit_time(launch, velocity, 0, duration, actor, delay, margin, moving) is not None:
+                    return False
+            return True
+        if kind == "lightning":
+            cone = math.radians(stats.get("cone_deg", 30))
+            entities = list(obs.get("mechs", ())) + [{**c, "kind": "crate"} for c in obs.get("crates", ())]
+            if not any(a.get("id") == target.get("id") for a in entities):
+                entities.append(target)
+            centers = {}
+            for actor in entities:
+                if actor.get("hp", 1) <= 0:
+                    continue
+                _, height = self._body(actor)
+                av = actor.get("vel", (0, 0, 0))
+                centers[actor.get("id")] = [actor["pos"][i] + av[i] * delay + (height * 0.5 if i == 2 else 0) for i in range(3)]
+            center = centers.get(target.get("id"), solution["point"])
+            target_distance = math.dist(launch, center)
+            possible = {target.get("id")}
+            for actor_id, point in centers.items():
+                d = math.dist(launch, point)
+                yaw = math.atan2(point[1] - launch[1], point[0] - launch[0])
+                if d <= min(stats.get("range", 45), target_distance + 1e-6) and abs(angle_delta(yaw, aim[0])) <= cone:
+                    if actor_id in protected_ids:
+                        return False
+                    possible.add(actor_id)
+            # Follow only observed possible chain recipients. Ignoring cover
+            # here can decline a safe arc, but cannot invent a safe occlusion.
+            reached = set(possible)
+            for _ in range(min(4, max(0, int(stats.get("chain", 2))))):
+                frontier = set()
+                for actor_id, point in centers.items():
+                    if actor_id in reached:
+                        continue
+                    if any(math.dist(point, centers[previous]) <= stats.get("chain_range", 14)
+                           for previous in possible if previous in centers):
+                        if actor_id in protected_ids:
+                            return False
+                        frontier.add(actor_id)
+                if not frontier:
+                    break
+                reached.update(frontier)
+                possible = frontier
+            return True
+        if kind == "mortar":
+            flight = solution["flight"]
+            velocity = [v * stats.get("speed", 72) for v in vec]
+            gravity = stats.get("gravity", 22)
+            impact = [launch[i] + velocity[i] * flight for i in range(3)]
+            impact[2] -= 0.5 * gravity * flight * flight
+            target_radius, _ = self._body(target)
+            for actor in protected:
+                radius, height = self._body(actor)
+                av = actor.get("vel", (0, 0, 0))
+                feet = [actor["pos"][i] + av[i] * (delay + flight) for i in range(3)]
+                vertical = max(feet[2] - impact[2], 0, impact[2] - feet[2] - height)
+                horizontal = max(0, math.dist(feet[:2], impact[:2]) - radius)
+                if math.hypot(horizontal, vertical) <= stats.get("splash_radius", 7) + target_radius:
+                    return False
+                if self._body_hit_time(launch, velocity, gravity, flight, actor, delay, 0.5) is not None:
+                    return False
+            return True
+        return True
+
+    def plan(self, obs, target, allow_fire=True, emergency=False, protected_ids=None):
         me = obs["self"]
         weapons = list(me.get("weapons", [None, None]))[:2]
         weapons += [None] * (2 - len(weapons))
@@ -490,6 +619,9 @@ class Combat:
                 aligned = valid and self._aligned(actual_next, sol, radius, height)
                 if aligned and charge > 0:
                     aligned = self._actual_ray_clear(origins[slot], own["radius"] + 0.5, actual_next, sol, radius, height)
+                collateral = (not valid or self.collateral_clear(obs, target, kind, stats, origins[slot],
+                              actual_next, fire_delay[slot], sol, protected_ids))
+                aligned = aligned and collateral
                 if charge >= full - 1e-6:
                     self._full_since.setdefault(slot, now)
                 else:
@@ -505,7 +637,7 @@ class Combat:
                 else:
                     # Charging is useful only with a real shot, and avoid its
                     # movement penalty during root-policy escape decisions.
-                    action["fire"][slot] = bool(ready[slot] and valid and not emergency
+                    action["fire"][slot] = bool(ready[slot] and valid and collateral and not emergency
                                                  and abs(angle_delta(sol["aim"][0], actual_next[0])) < 0.6)
             elif kind == "lightning":
                 # cone_deg is the allowed deviation from aim yaw, not the
@@ -526,4 +658,8 @@ class Combat:
                     base = sol["base_origin"]
                     launch = [base[i] + (own["radius"] + 0.5) * vec[i] for i in range(3)]
                     action["fire"][slot] = self._arc_clear(base, launch, actual_next, stats, sol["flight"])
+            if action["fire"][slot] and kind != "laser" and sol:
+                base = sol["base_origin"] if kind == "mortar" else origins[slot]
+                action["fire"][slot] = self.collateral_clear(obs, target, kind, stats, base,
+                                                            actual_next, fire_delay[slot], sol, protected_ids)
         return action

@@ -1,8 +1,10 @@
 # labubu — Mech Royale
 
 An adaptive, map-aware bot for the Builders Buildathon 2026 Mech Royale track.
-The controller combines bounded ground navigation, obstacle-aware firing,
-moving-target interception, recovery, anticipatory zone movement, and selective loot.
+The controller observes enemy fights, farms safely, returns attributed attacks,
+and attempts short finishes against the lowest-health eligible participant.
+It combines collision-aware navigation, moving-target interception, recovery,
+anticipatory zone movement, and selective loot.
 
 ## Run
 
@@ -24,11 +26,15 @@ conformance; it does **not** establish a gameplay score.
 
 See [DESIGN.md](DESIGN.md) for the competition requirements, strategy,
 implementation plan, limits, and evaluation process.
-See [STRATEGY_V2.md](STRATEGY_V2.md) for the 6.3 target, evidence, and next design.
+See [AGENT_STRATEGY_PLAN.md](AGENT_STRATEGY_PLAN.md) for the current **6.0** target,
+confirmed engagement policy, and movement/fire/orchestration responsibilities.
+Earlier experiments remain documented in [STRATEGY_V2.md](STRATEGY_V2.md).
 
 - `bot.py`: strategy, recovery, upgrades, resource completion, and zone prediction.
 - `arena_map.py`: spatial index, terrain, solid geometry, bounded navigation.
 - `combat.py`: shared aim arbitration and weapon control.
+- `engagement.py`: attributed self-defense, observed fights, and finishing permission.
+- `positioning.py`: per-candidate escape, zone, and exposure safety gates.
 - `tactical.py`: bounded physical trajectories, swept projectile avoidance, and exposure.
 - `mechfight.py`: official stdin/stdout wrapper.
 - `check/`, `arena/`, `protocol.md`, `mechfight.schema.json`: official kit resources.

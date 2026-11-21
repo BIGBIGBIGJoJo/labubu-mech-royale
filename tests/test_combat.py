@@ -494,6 +494,91 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(action["fire"], [False, False])
         self.assertTrue(action["reload"])
 
+    def test_optional_protected_mech_blocks_gun_interception(self):
+        target = enemy(100)
+        quiet = {**enemy(50), "id": 6}
+        obs = observation(weapon("gun"))
+        obs["mechs"] = [target, quiet]
+        controller = combat.Combat(CONFIG)
+        self.assertTrue(controller.plan(obs, target)["fire"][0])
+        self.assertFalse(controller.plan(obs, target, protected_ids={6})["fire"][0])
+        obs["mechs"][1]["pos"][1] = 15
+        self.assertTrue(controller.plan(obs, target, protected_ids={6})["fire"][0])
+
+    def test_gun_protection_includes_spread_corridor_and_motion(self):
+        target = enemy(100)
+        obs = observation(weapon("gun"))
+        obs["mechs"] = [target, {**enemy(50, 4), "id": 6}]
+        controller = combat.Combat(CONFIG)
+        self.assertFalse(controller.plan(obs, target, protected_ids={6})["fire"][0])
+        obs["mechs"][1].update(pos=[50, 8, 0], vel=[0, -25, 0])
+        self.assertFalse(controller.plan(obs, target, protected_ids={6})["fire"][0])
+
+    def test_protection_does_not_include_unobserved_mechs(self):
+        target = enemy(100)
+        obs = observation(weapon("gun"))
+        obs["mechs"] = [target]
+        self.assertTrue(combat.Combat(CONFIG).plan(obs, target, protected_ids={6})["fire"][0])
+
+    def test_fresh_laser_charge_is_blocked_by_protected_interceptor(self):
+        target = enemy(100)
+        obs = observation(weapon("laser"))
+        obs["mechs"] = [target, {**enemy(50), "id": 6}]
+        self.assertFalse(combat.Combat(CONFIG).plan(obs, target, protected_ids={6})["fire"][0])
+
+    def test_piercing_laser_protects_mech_behind_selected_target(self):
+        target = enemy(50)
+        obs = observation(weapon("laser"))
+        obs["mechs"] = [target, {**enemy(100), "id": 6}]
+        controller = combat.Combat(CONFIG)
+        self.assertTrue(controller.plan(obs, target, protected_ids={6})["fire"][0])
+        obs["self"]["weapons"][0]["stats"]["pierce"] = 1
+        self.assertFalse(controller.plan(obs, target, protected_ids={6})["fire"][0])
+
+    def test_existing_laser_charge_has_bounded_unavoidable_release(self):
+        target = enemy(100)
+        obs = observation(weapon("laser", charge=0.75))
+        obs["mechs"] = [target, {**enemy(50), "id": 6}]
+        controller = combat.Combat(CONFIG)
+        self.assertTrue(controller.plan(obs, target, protected_ids={6})["fire"][0])
+        obs["t"] += 0.4
+        self.assertFalse(controller.plan(obs, target, protected_ids={6})["fire"][0])
+
+    def test_lightning_blocks_quiet_primary_and_quiet_chain(self):
+        for target_x, quiet_x, quiet_y in ((40, 30, 3), (30, 40, 0)):
+            with self.subTest(target_x=target_x):
+                target = enemy(target_x)
+                obs = observation(weapon("lightning"))
+                obs["mechs"] = [target, {**enemy(quiet_x, quiet_y), "id": 6}]
+                self.assertFalse(combat.Combat(CONFIG).plan(obs, target, protected_ids={6})["fire"][0])
+
+    def test_lightning_detects_observed_second_chain_through_npc(self):
+        target = enemy(30)
+        obs = observation(weapon("lightning"))
+        obs["mechs"] = [target, {**enemy(55), "id": 6},
+                        {**enemy(42), "id": 101, "kind": "npc"}]
+        self.assertFalse(combat.Combat(CONFIG).plan(obs, target, protected_ids={6})["fire"][0])
+        obs["mechs"].pop()
+        self.assertTrue(combat.Combat(CONFIG).plan(obs, target, protected_ids={6})["fire"][0])
+
+    def test_lightning_guard_does_not_suppress_safe_gun_slot(self):
+        target = enemy(30)
+        obs = observation(weapon("gun"), weapon("lightning"))
+        obs["mechs"] = [target, {**enemy(40, 8), "id": 6}]
+        action = combat.Combat(CONFIG).plan(obs, target, protected_ids={6})
+        self.assertTrue(action["fire"][0])
+        self.assertFalse(action["fire"][1])
+
+    def test_mortar_protects_nearby_mech_from_splash(self):
+        target = enemy(150)
+        obs = observation(weapon("mortar"))
+        controller = combat.Combat(CONFIG)
+        obs["self"]["aim"] = controller.plan(obs, target)["aim"]
+        obs["mechs"] = [target, {**enemy(150, 9), "id": 6}]
+        self.assertFalse(controller.plan(obs, target, protected_ids={6})["fire"][0])
+        obs["mechs"][1]["pos"][1] = 30
+        self.assertTrue(controller.plan(obs, target, protected_ids={6})["fire"][0])
+
 
 if __name__ == "__main__":
     unittest.main()
