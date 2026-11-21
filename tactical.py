@@ -306,7 +306,9 @@ class TacticalPlanner:
     def choose(self,obs,navigation,threats,stats,*,goal=None,recover=False,
                urgent=False,spacing_boost=False,deadline=None):
         begin=time.perf_counter()
-        deadline=min(deadline if deadline is not None else begin+.014,begin+.014)-.0015
+        # Bot.act supplies its unchanged global deadline. Reuse its remaining
+        # time for validation; standalone callers retain the 14ms default.
+        deadline=(deadline if deadline is not None else begin+.014)-.0015
         if deadline<=begin:
             self.last_report={"ms":(time.perf_counter()-begin)*1000,"candidates":0,
                               "geometry_checked":0,"projectiles":0,"fallback":True}
