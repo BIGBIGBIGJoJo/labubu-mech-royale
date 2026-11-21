@@ -156,6 +156,22 @@ class PositioningTests(unittest.TestCase):
         self.obs['projectiles'] = [{'kind':'mortar','pos':[0,0,10],'vel':[0,0,-10]}]
         self.assertEqual(self.evaluate().reasons[1], 'incoming_mortar')
 
+    def test_observed_harmless_npc_bullet_does_not_veto_finish(self):
+        # Actual v2 private observation at 50.7s, translated to our origin.
+        # NPC bullets are straight projectiles, not an unknown schema kind.
+        self.obs['projectiles'] = [{'id':714, 'kind':'npc',
+                                   'pos':[60.86,185.15,3.89],
+                                   'vel':[84.58,-30.42,4.6]}]
+        result = self.evaluate()
+        self.assertTrue(result.allows(self.a))
+        self.assertEqual(result.reasons[1], 'safe_current_position')
+
+    def test_incoming_npc_bullet_still_vetoes_finish(self):
+        self.obs['projectiles'] = [{'kind':'npc','pos':[-40,0,4],'vel':[90,0,0]}]
+        result = self.evaluate()
+        self.assertFalse(result.allowed_ids)
+        self.assertEqual(result.reasons[1], 'incoming_projectile')
+
     def test_repair_callback_is_per_candidate_and_uncertainty_is_not_permission(self):
         result = self.evaluate(repair_before_finish=lambda actor: actor['id']==1)
         self.assertFalse(result.allows(self.a))

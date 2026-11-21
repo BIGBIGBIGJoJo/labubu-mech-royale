@@ -102,10 +102,10 @@ class FinishSafety:
             if time.perf_counter() >= deadline:
                 return "budget_exhausted"
             kind = shot.get("kind")
-            if kind not in ("gun", "mortar") or "pos" not in shot or "vel" not in shot:
+            if kind not in ("gun", "npc", "mortar") or "pos" not in shot or "vel" not in shot:
                 return "unknown_projectile"
             start, velocity = shot["pos"], shot["vel"]
-            if kind == "gun":
+            if kind in ("gun", "npc"):
                 vx, vy = velocity[:2]
                 length2 = vx * vx + vy * vy
                 at = min(.6, max(0.0, ((p[0]-start[0])*vx+(p[1]-start[1])*vy)/max(length2,1e-9)))
