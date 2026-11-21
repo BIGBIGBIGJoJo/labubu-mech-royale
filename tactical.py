@@ -27,11 +27,59 @@ def accelerate(vx,vy,target_x,target_y,maximum_delta):
     return vx+dx*fraction,vy+dy*fraction
 
 
+def pursuit_distance(config,me,target,stats,*,line_clear=True):
+    """Preferred horizontal engagement distance, not firing authorization.
+
+    Anchors are deliberate aggressive-policy parameters. Body/pitch/blast
+    floors avoid common unusable close positions; Combat still checks the
+    actual shot. Occluded targets are approached toward the geometric floor.
+    An already closer clear target never causes retreat solely to restore an
+    ordinary range anchor. This function performs no geometry queries.
+    """
+    weapons=[w for w in me.get("weapons",[])[:2] if w]
+    live={w["kind"]:{**config.get("weapons",{}).get(w["kind"],{}),
+                     **w.get("stats",{})} for w in weapons}
+    npc=target.get("kind")=="npc"
+    body=config.get("npc" if npc else "mech",{})
+    scale=1.0 if npc else 1.0+config.get("cubes",{}).get("size_per_cube",.05)*target.get("cubes",0)
+    target_radius=body.get("radius",1.8 if npc else 2.5)*scale
+    target_height=body.get("height",3.5 if npc else 9.0)*scale
+    own_radius=stats.get("radius",config.get("mech",{}).get("radius",2.5))
+    # This also keeps the ordinary own-radius+.5 barrel extension short of
+    # the target's body. Dynamic actor collision is not part of ArenaMap.
+    minimum=own_radius+target_radius+2.0
+    if "gun" in live or "laser" in live:
+        muzzle=me["pos"][2]+stats.get("muzzle_height",7.0)
+        bottom=target["pos"][2]+target_height*.1
+        top=target["pos"][2]+target_height*.9
+        down=-stats.get("min_pitch",-.7)
+        up=stats.get("max_pitch",1.3)
+        if muzzle>top and 0<down<math.pi/2:
+            minimum=max(minimum,(muzzle-top)/math.tan(down)+2.0)
+        elif bottom>muzzle and 0<up<math.pi/2:
+            minimum=max(minimum,(bottom-muzzle)/math.tan(up)+2.0)
+    if "mortar" in live:
+        minimum=max(minimum,15.0,live["mortar"].get("splash_radius",7.0)+own_radius+3.0)
+    anchor=35.0 if npc else (80.0 if "laser" in live or "mortar" in live else 70.0)
+    direct_ranges=[live[k].get("range",230.0 if k=="gun" else 280.0)
+                   for k in ("gun","laser") if k in live]
+    if direct_ranges:
+        anchor=min(anchor,max(0.0,min(direct_ranges)-6.0))
+    lightning=live.get("lightning")
+    # This helper is used only for ordinary pursuit. Match Combat's normal
+    # lightning trigger reserve; paying the raw shot cost alone is insufficient.
+    if lightning and me.get("energy",0)>=lightning.get("energy",3.0)+8.0:
+        anchor=min(anchor,max(0.0,lightning.get("range",45.0)-6.0))
+    distance=math.hypot(me["pos"][0]-target["pos"][0],me["pos"][1]-target["pos"][1])
+    return max(minimum,min(anchor,distance)) if line_clear else minimum
+
+
 class TacticalPlanner:
     def __init__(self,config,arena):
         self.config=config
         self.map=arena
         self.dt=1.0/max(1.0,float(config.get("match",{}).get("tick_hz",20)))
+        self.action_dt=self.dt*max(1,int(config.get("match",{}).get("decide_every",2)))
         self.steps=max(2,int(round(0.6/self.dt)))
         self.horizon=self.steps*self.dt
         self.last_direction=(0.0,0.0)
@@ -209,7 +257,7 @@ class TacticalPlanner:
         laser=self.config["weapons"]["laser"]
         for q in threats:
             actor=q["actor"]
-            if not actor.get("charging") or not q.get("los"):
+            if not actor.get("charging") or (not q.get("los") and q.get("los_known",True)):
                 continue
             yaw,pitch=actor.get("aim",(0,0))
             scale=1+self.config.get("cubes",{}).get("size_per_cube",.05)*actor.get("cubes",0)
@@ -239,7 +287,7 @@ class TacticalPlanner:
                 strength=self._strength(actor,distance)
                 if strength<=0:
                     continue
-                visible=1.0 if q.get("los") else .3
+                visible=1.0 if q.get("los") or not q.get("los_known",True) else .3
                 if exact and time.perf_counter()+.0007<deadline:
                     scale=1+self.config.get("cubes",{}).get("size_per_cube",.05)*actor.get("cubes",0)
                     source_height=(self.config.get("npc",{}).get("height",3.5) if actor.get("kind")=="npc"
@@ -304,14 +352,18 @@ class TacticalPlanner:
         return result
 
     def choose(self,obs,navigation,threats,stats,*,goal=None,recover=False,
-               urgent=False,spacing_boost=False,deadline=None):
+               urgent=False,spacing_boost=False,pursuit=False,shot_energy=0.0,deadline=None):
         begin=time.perf_counter()
         deadline=min(deadline if deadline is not None else begin+.014,begin+.014)-.0015
         if deadline<=begin:
             self.last_report={"ms":(time.perf_counter()-begin)*1000,"candidates":0,
-                              "geometry_checked":0,"projectiles":0,"fallback":True}
+                              "geometry_checked":0,"projectiles":0,"fallback":True,
+                              "pursuit":bool(pursuit)}
             return (0.0,0.0),False
         me=obs["self"]
+        shot_energy=max(0.0,float(shot_energy))
+        if shot_energy:
+            me={**me,"energy":max(0.0,me["energy"]-shot_energy)}
         nav=unit(*navigation)
         angle=math.atan2(nav[1],nav[0])
         directions=[nav,self.last_direction,(0.0,0.0)]
@@ -329,7 +381,9 @@ class TacticalPlanner:
                 seen.add(key)
         pressure=sorted(threats,key=lambda q:self._strength(q["actor"],q["d"]),reverse=True)[:3]
         tracks=self._projectiles(obs,min(deadline,begin+.0015))
-        allow_boost=me.get("grounded",True) and me["energy"]>(12 if urgent else 35)
+        boost_reserve=12.0 if urgent else 35.0
+        allow_boost=(me.get("grounded",True)
+                     and me["energy"]-stats["boost_drain"]*self.action_dt>=boost_reserve)
         ranked=[]
         cheap_deadline=min(deadline-.004,begin+.006)
         for direction in unique:
@@ -345,7 +399,7 @@ class TacticalPlanner:
                 if goal is not None and math.hypot(goal[0]-me["pos"][0],goal[1]-me["pos"][1])<12:
                     cost+=math.hypot(end[1]-goal[0],end[2]-goal[1])*.8
                 if boost:
-                    cost+=1.8 if urgent or recover or spacing_boost else 6.5
+                    cost+=1.8 if urgent or recover or spacing_boost or pursuit else 6.5
                     cost+=max(0,35-end[7])*.15
                 cost+=.3*(1-direction[0]*self.last_direction[0]-direction[1]*self.last_direction[1])
                 bullet=self.projectile_cost(path,tracks,stats)
@@ -385,5 +439,7 @@ class TacticalPlanner:
             result=(best[1],best[2])
             self.last_direction=best[1]
         self.last_report={"ms":(time.perf_counter()-begin)*1000,"candidates":len(ranked),
-                          "geometry_checked":checked,"projectiles":len(tracks),"fallback":best is None}
+                          "geometry_checked":checked,"projectiles":len(tracks),"fallback":best is None,
+                          "pursuit":bool(pursuit),"boost_allowed":bool(allow_boost),
+                          "boost_reserve":boost_reserve,"shot_energy":shot_energy}
         return result

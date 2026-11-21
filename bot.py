@@ -8,7 +8,7 @@ from collections import deque
 import mechfight as mf
 from arena_map import ArenaMap
 from combat import Combat
-from tactical import TacticalPlanner
+from tactical import TacticalPlanner, pursuit_distance
 
 
 def distance(a, b):
@@ -34,6 +34,7 @@ class Bot:
         self.tactical = TacticalPlanner(self.config, self.map)
         self.slot = hello["slot"]
         self.recover = False
+        self.recovery_needed = False
         self.mode = "explore"
         self.goal = None
         self.goal_until = -1.0
@@ -50,12 +51,15 @@ class Bot:
         self.strafe = 1 if self.slot % 2 else -1
         self.last_strafe = 0.0
         self.telemetry = {}
+        self.last_threat_report = {}
         self.visited = {}
         self.visit_t = -1
         self.spacing_boost = False
+        self.pursuit_boost = False
         self.recent_attackers = {}
         self.resource_key = None
         self.target_id = None
+        self.eliminated_mechs = set()
 
     def stats(self, me):
         stats = {**self.config["mech"], **me.get("stats", {})}
@@ -88,6 +92,9 @@ class Bot:
             self.visited[cell] = self.visited.get(cell, 0) + 1
             self.visit_t = t
         for event in obs.get("events", []):
+            if (event["type"] == "kill" and isinstance(event.get("target"), int)
+                    and 0 <= event["target"] < 16 and event["target"] != me.get("id", self.slot)):
+                self.eliminated_mechs.add(event["target"])
             if event["type"] in ("hit", "damaged"):
                 self.last_combat = t
             if event["type"] == "damaged":
@@ -127,50 +134,55 @@ class Bot:
             h = self.config["mech"]["height"] * (1 + self.config["cubes"].get("size_per_cube", 0) * actor.get("cubes", 0))
         return [actor["pos"][0], actor["pos"][1], actor["pos"][2] + h * 0.5]
 
-    def threats(self, obs, s):
+    def threats(self, obs, s, deadline=None):
+        started = time.perf_counter()
         p = obs["self"]["pos"]
         eye = [p[0], p[1], p[2] + s["muzzle_height"]]
         result = []
-        for actor in sorted(obs.get("mechs", []), key=lambda a: distance(a["pos"], p))[:16]:
+        rays, max_ray_ms = 0, 0.0
+        def ray(point):
+            nonlocal rays, max_ray_ms
+            before = time.perf_counter()
+            if deadline is not None and before >= deadline:
+                return None
+            clear = bool(self.map.line_of_fire(eye, point))
+            rays += 1
+            max_ray_ms = max(max_ray_ms, (time.perf_counter() - before) * 1000)
+            return clear
+        actors = (a for a in obs.get("mechs", []) if a.get("kind") in ("mech", "npc")
+                  and a.get("id") != obs["self"].get("id", self.slot)
+                  and not (a.get("kind") == "mech" and a.get("id") in self.eliminated_mechs)
+                  and (a.get("hp") is None or a["hp"] > 0))
+        # Official maximum: 15 other mechs plus 12 NPCs. Reported actors can
+        # remain listed behind cover; map clearance is not fresh visibility.
+        for actor in sorted(actors, key=lambda a: distance(a["pos"], p))[:27]:
             d = distance(actor["pos"], p)
-            if actor.get("kind") == "npc" and d > self.config["npc"]["aggro_range"] + 15:
-                continue
             center = self.actor_center(actor)
-            visible = self.map.line_of_fire(eye, center)
-            if not visible:
+            clear = ray(center)
+            if clear is False:
                 upper = [center[0], center[1], actor["pos"][2] + (center[2] - actor["pos"][2]) * 1.8]
-                visible = self.map.line_of_fire(eye, upper)
+                clear = ray(upper)
+            visible, known = clear is True, clear is not None
             weapons = actor.get("weapons", ["gun"])
             threat = (1.0 if actor.get("kind") == "mech" else .16) * (1 + .04 * actor.get("cubes", 0))
-            threat *= 1.0 if visible else .18
+            threat *= 1.0 if visible or not known else .18
             threat *= 1.0 + max(0, 80 - d) / 60
             if "lightning" in weapons and d < 55:
                 threat *= 1.6
             if actor.get("charging"):
                 threat *= 1.5
-            result.append({"actor": actor, "d": d, "los": visible, "risk": threat})
+            result.append({"actor": actor, "d": d, "los": visible, "los_known": known, "risk": threat})
+        self.last_threat_report = {"actors": len(result), "rays": rays,
+                                   "unknown": sum(not q["los_known"] for q in result),
+                                   "max_ray_ms": max_ray_ms, "ms": (time.perf_counter() - started) * 1000}
         return result
 
     def choose_target(self, obs, threats):
-        me = obs["self"]
-        ranged = max((w["stats"].get("range", 230) for w in me["weapons"] if w and w["kind"] != "mortar"), default=230)
-        targets = [q for q in threats if q["los"] and q["d"] < ranged]
-        if not targets:
+        if not threats:
+            self.target_id = None
             return None
-        close_mech = any(q["actor"]["kind"] == "mech" and q["d"] < 90 for q in targets)
-        attacking_npcs = [q for q in targets if q["actor"]["kind"] == "npc" and q["d"] <= 60 and obs["t"] - self.recent_attackers.get(q["actor"]["id"], -100) < 3]
-        if attacking_npcs and not close_mech:
-            # Clear an actual nearby attacker before trading shots at distant mechs.
-            return min(attacking_npcs, key=lambda q: (q["actor"].get("hp", 350), q["d"]))["actor"]
-        def value(q):
-            a = q["actor"]
-            hp = a.get("hp", a.get("max_hp", 1400))
-            threat = 2.0 if a.get("kind") == "mech" else .4
-            finishing = 2.5 if hp < 200 and q["d"] < 140 else 0
-            continuity = .35 if a["id"] == self.target_id else 0
-            attacking = .7 if obs["t"] - self.recent_attackers.get(a["id"], -100) < 3 else 0
-            return threat + q["risk"] + 1.6 * (1 - hp / max(a.get("max_hp", 1400), 1)) + finishing + continuity + attacking - .006 * q["d"]
-        target = max(targets, key=value)["actor"]
+        target = min(threats, key=lambda q: (q["d"], q["actor"]["id"] != self.target_id,
+                                            q["actor"]["id"]))["actor"]
         self.target_id = target["id"]
         return target
 
@@ -252,7 +264,7 @@ class Bot:
             d = distance(point, actor["pos"])
             if d < 260 and self.map.line_of_fire(origin, self.actor_center(actor)):
                 # Re-evaluate exposure at this position, not at the old position.
-                strength = q["risk"] / (1 if q["los"] else .18)
+                strength = q["risk"] / (1 if q["los"] or not q.get("los_known", True) else .18)
                 score += strength * (55 if recovering else 16)
                 score += max(0, 65 - d) * (1.3 if recovering else .35)
                 if recovering:
@@ -502,7 +514,7 @@ class Bot:
                 candidates.append((score, point, "drop", key, drop))
         return max(candidates, default=None, key=lambda c: c[0])
 
-    def movement(self, obs, navigation, threats, s, urgent, deadline, goal=None):
+    def movement(self, obs, navigation, threats, s, urgent, deadline, goal=None, shot_energy=0.0):
         if time.perf_counter() >= deadline:
             # Keep a short verified route if optional tactical work has expired.
             path = self.tactical.rollout(obs["self"], navigation, False, s)[:4]
@@ -512,28 +524,54 @@ class Bot:
             return (0.0, 0.0), False
         return self.tactical.choose(obs, navigation, threats, s, goal=goal,
                                     recover=self.recover, urgent=urgent,
-                                    spacing_boost=self.spacing_boost, deadline=deadline)
+                                    spacing_boost=self.spacing_boost, pursuit=self.pursuit_boost,
+                                    shot_energy=shot_energy, deadline=deadline)
 
     def act(self, obs):
         start = time.perf_counter()
         deadline = start + .032
         me, t = obs["self"], obs["t"]
         self.spacing_boost = False
+        self.pursuit_boost = False
         self.update(obs)
         s = self.stats(me)
-        threats = self.threats(obs, s)
-        visible = [q for q in threats if q["los"] and q["actor"]["kind"] == "mech"]
+        threats = self.threats(obs, s, deadline=start + .006)
+        visible = [q for q in threats if q["los"]]
+        nearby, near_complete, unknown_near = None, True, None
+        near_reason = "no_usable_enemy"
+        near_deadline = min(deadline - .022, time.perf_counter() + .002)
+        for q in threats:
+            if not self.combat.range_envelope_possible(obs, q["actor"]):
+                continue
+            if not q["los_known"]:
+                unknown_near = unknown_near or (q, "visibility_unverified")
+                continue
+            if not q["los"]:
+                continue
+            usable = self.combat.geometrically_usable(obs, q["actor"], line_clear=True, deadline=near_deadline)
+            if usable is True:
+                nearby, near_reason = q, "usable_geometry"
+                break
+            if usable is None:
+                unknown_near = unknown_near or (q, "geometry_unverified")
+        if nearby is None and unknown_near is not None:
+            nearby, near_reason = unknown_near
+            near_complete = False
+        near = nearby is not None
         hp = me["hp"] / me["max_hp"]
-        if hp < .55 or (len(visible) >= 2 and hp < .82):
-            self.recover = True
-        if hp >= .93 or (obs["zone"]["radius"] < 18 and visible):
-            self.recover = False
+        if hp < .55:
+            self.recovery_needed = True
+        if hp >= .93:
+            self.recovery_needed = False
+        self.recover = self.recovery_needed and not near
         target = self.choose_target(obs, threats)
+        pursuit_target = target
+        pursuit_los = next((q["los"] for q in threats if target and q["actor"]["id"] == target["id"]), False)
         zone = obs["zone"]
         center, future_radius = self.zone_future(obs, 12)
         p = me["pos"]
         urgent = not me["in_zone"] or distance(p, center) + s["radius"] + 8 > future_radius
-        resource = self.resource_goal(obs, threats, deadline=min(deadline - .017, time.perf_counter() + .004)) if not urgent else None
+        resource = self.resource_goal(obs, threats, deadline=min(deadline - .017, time.perf_counter() + .004)) if not urgent and target is None else None
         self.resource_key = resource[3] if resource else None
         if urgent:
             self.mode = "rotate"
@@ -542,7 +580,7 @@ class Bot:
         elif self.recover:
             self.mode = "recover"
         else:
-            self.mode = "engage" if target else "position"
+            self.mode = ("engage" if near else "pursue") if target else "position"
         if urgent or (self.recover and not resource) or (not target and not resource):
             if self.goal is None or t >= self.goal_until or self.goal_kind != self.mode or distance(self.goal, center) > future_radius:
                 self.goal = self.safe_goal(obs, threats, s, deadline - .013)
@@ -573,18 +611,7 @@ class Bot:
         else:
             q = target
             d = distance(p, q["pos"])
-            held = {w["kind"] for w in me["weapons"] if w}
-            # At 120 m a 252 m/s gun round affords ~0.48 s to dodge; at
-            # 70 m only ~0.28 s. Charging needs extra room for its slowdown.
-            preferred = 150 if "laser" in held else 120
-            if q.get("kind") == "npc":
-                preferred = 35
-            if "lightning" in held and hp > .7 and len(visible) <= 1 and q.get("kind") == "mech":
-                preferred = 33 if "laser" in q.get("weapons", []) else 38
-            if len(visible) >= 2:
-                preferred += 35
-            if "lightning" in q.get("weapons", []) and "lightning" not in held:
-                preferred = max(80, preferred)
+            preferred = pursuit_distance(self.config, me, q, s, line_clear=pursuit_los)
             ux, uy = unit(q["pos"][0] - p[0], q["pos"][1] - p[1])
             # Match an approaching enemy's radial velocity before adding strafe.
             # Fixed strafing otherwise makes retreat slower than its pursuit.
@@ -592,19 +619,19 @@ class Bot:
             closing_velocity = velocity[0] * ux + velocity[1] * uy
             radial = clamp((closing_velocity + .6 * (d - preferred)) / s["walk_speed"], -1, 1)
             self.spacing_boost = radial < -.92 and d < preferred + 8
+            self.pursuit_boost = d > preferred + 8 and radial > 0
             tangent = .8 * math.sqrt(max(0, 1 - radial * radial))
             if t - self.last_strafe > 2.8:
                 self.strafe *= -1
                 self.last_strafe = t
             dx, dy = unit(ux * radial - uy * tangent * self.strafe, uy * radial + ux * tangent * self.strafe)
             goal = [p[0] + dx * 20, p[1] + dy * 20, p[2]]
-        imminent = any(q["los"] and q["d"] < 28 for q in threats)
-        active_contact = target is not None and target.get("kind") == "mech" and t - self.last_weapon_hurt < min(3.0, s["regen_delay"])
-        active_contact = active_contact and any(q["actor"]["id"] == target["id"] and q["los"] for q in threats)
-        if target is not None and target.get("kind") == "npc":
-            active_contact = t - self.recent_attackers.get(target["id"], -100) < min(3.0, s["regen_delay"]) and not any(q["actor"]["kind"] == "mech" and q["los"] and q["d"] < 90 for q in threats)
-        allow_fire = not self.recover or imminent or active_contact
-        combat = self.combat.plan(obs, target, allow_fire=allow_fire, emergency=urgent or self.recover)
+        allow_fire = not self.recover
+        # Keep distant/occluded pursuit separate from firing so a reported
+        # actor cannot block an otherwise permitted quiet ammunition top-up.
+        fire_target = target if near or resource else None
+        combat = self.combat.plan(obs, fire_target, allow_fire=allow_fire, emergency=urgent or self.recover,
+                                  allow_partial_reload=not near)
         navigation = self.map.navigate(p, goal, s["radius"], s["height"], deadline=deadline - .012)
         if distance(p, goal) < 1.5:
             navigation = (0, 0)
@@ -612,7 +639,9 @@ class Bot:
                            if w and w["kind"] == "laser" else w)
                           for i, w in enumerate(me["weapons"])]
         motion_obs = {**obs, "self": {**me, "weapons": motion_weapons}}
-        move, boost = self.movement(motion_obs, navigation, threats, s, urgent, deadline, goal)
+        shot_energy = sum(w["stats"].get("energy", 0) for i, w in enumerate(me["weapons"])
+                          if w and w["kind"] == "lightning" and combat["fire"][i])
+        move, boost = self.movement(motion_obs, navigation, threats, s, urgent, deadline, goal, shot_energy)
         stuck = bool(len(self.history) > 8 and t - self.history[0][0] > 1.3 and distance(p, self.history[0][1]) < 1.3 and sum(h[2] for h in self.history) > len(self.history) * .6)
         jump = False
         if stuck:
@@ -621,10 +650,16 @@ class Bot:
             self.goal_until = -1
             if me["grounded"] and me["energy"] > 40 and t - self.last_jump > 3:
                 jump, self.last_jump = True, t
-        if target is None or not allow_fire:
+        releasing_charge = any(w and w["kind"] == "laser" and w.get("charge", 0) > 0 for w in me["weapons"])
+        if (fire_target is None or not allow_fire) and not releasing_charge:
             # Turn toward received fire, otherwise scan instead of staring at the destination.
             if t - self.last_hurt < 3 and self.damage_bearing is not None:
                 combat["aim"] = [self.damage_bearing, me["aim"][1]]
+            elif pursuit_target is not None and not self.recover:
+                point = self.actor_center(pursuit_target)
+                combat["aim"] = [math.atan2(point[1] - p[1], point[0] - p[0]),
+                                 clamp(math.atan2(point[2] - p[2] - s["muzzle_height"],
+                                                  max(.01, distance(p, point))), s["min_pitch"], s["max_pitch"])]
             elif threats:
                 enemy = max(threats, key=lambda q: q["risk"])["actor"]
                 combat["aim"] = [math.atan2(enemy["pos"][1] - p[1], enemy["pos"][0] - p[0]), 0]
@@ -643,6 +678,14 @@ class Bot:
         self.last_move = move
         self.telemetry = {"mode": self.mode, "goal": goal, "resource": self.resource_key,
                           "target": target.get("id") if target else None,
+                          "pursuit_target": pursuit_target.get("id") if pursuit_target else None,
+                          "pursuit_los": pursuit_los,
+                          "nearby_enemy": near, "near_target": nearby["actor"]["id"] if nearby else None,
+                          "near_assessment_complete": near_complete,
+                          "near_reason": near_reason, "visibility": self.last_threat_report,
+                          "fire_target": fire_target.get("id") if fire_target else None,
+                          "allow_fire": allow_fire, "allow_partial_reload": not near,
+                          "recovery_needed": self.recovery_needed, "pursuit_boost": self.pursuit_boost,
                           "recover": self.recover, "threats": len(visible), "stuck": stuck,
                           "tactical": self.tactical.last_report, "ms": (time.perf_counter() - start) * 1000}
         return action

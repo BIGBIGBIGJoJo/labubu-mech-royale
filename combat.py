@@ -10,6 +10,7 @@ therefore emit one beam: the documented protocol has no charge-cancel action.
 from __future__ import annotations
 
 import math
+import time
 
 
 def angle_delta(a, b):
@@ -149,7 +150,7 @@ class Combat:
         return (abs(angle_delta(solution["aim"][0], actual_next[0])) <= yaw_tolerance
                 and pitch_low <= actual_next[1] <= pitch_high)
 
-    def _direct_solution(self, kind, stats, origin, center, velocity, barrel_offset, limits, target_height):
+    def _direct_solution(self, kind, stats, origin, center, velocity, barrel_offset, limits, target_height, check_world=True):
         speed = float(stats.get("speed", 252.0))
         # All shots have a small muzzle extension. Re-solve the gun intercept
         # twice after applying it; a translated origin matters at close range.
@@ -184,7 +185,7 @@ class Combat:
             return None
         aim[1] = max(limits[0], min(limits[1], aim[1]))
         # Check the muzzle extension as well: a wall can shorten the barrel.
-        clear = self._clear(origin, predicted)
+        clear = not check_world or self._clear(origin, predicted)
         center_z = center[2] + velocity[2] * flight
         if not clear and kind in ("gun", "laser"):
             # A remembered actor's center may be hidden by a low wall while a
@@ -206,7 +207,7 @@ class Combat:
                 "horizontal": math.dist(shot_origin[:2], predicted[:2]),
                 "distance": distance, "clear": clear, "flight": flight, "center_z": center_z}
 
-    def _mortar_solution(self, stats, origin, center, velocity, me, self_stats, limits):
+    def _mortar_solution(self, stats, origin, center, velocity, me, self_stats, limits, deadline=None):
         speed = float(stats.get("speed", 72.0))
         gravity = float(stats.get("gravity", 22.0))
         if speed <= 0 or gravity <= 0:
@@ -234,6 +235,8 @@ class Combat:
         # Fixed work bound. A conservative extra collision margin belongs in
         # the arena segment checker, which has the actual terrain geometry.
         for step in range(1, 17):
+            if deadline is not None and time.perf_counter() >= deadline:
+                return None
             t = flight * step / 16.0
             sample = [origin[i] + speed * vec[i] * t for i in range(3)]
             sample[2] -= 0.5 * gravity * t * t
@@ -248,7 +251,83 @@ class Combat:
                 "horizontal": math.dist(origin[:2], point[:2]),
                 "distance": math.dist(origin, point), "clear": True, "flight": flight}
 
-    def plan(self, obs, target, allow_fire=True, emergency=False):
+    def range_envelope_possible(self, obs, target):
+        """Cheap conservative current-body reach, with no visibility queries.
+
+        True is only a proximity-policy possibility, never firing permission.
+        Including the target's radius and our full barrel extension avoids a
+        false out-of-range claim at body/range boundaries. A mortar is left
+        possible because vertical displacement and its arc need a real solve.
+        Readiness, ammunition, energy, pitch and present yaw are irrelevant.
+        """
+        if target is None:
+            return False
+        me = obs["self"]
+        own = self._self_stats(me)
+        radius, _ = self._body(target)
+        nearest = max(0.0, math.dist(me["pos"][:2], target["pos"][:2])
+                      - own["radius"] - 0.5 - radius)
+        for weapon in me.get("weapons", [])[:2]:
+            if not weapon:
+                continue
+            if weapon["kind"] == "mortar":
+                return True
+            if nearest <= self._stats(weapon).get("range", 230.0):
+                return True
+        return False
+
+    def geometrically_usable(self, obs, target, line_clear=None, deadline=None):
+        """Whether a held weapon geometrically reaches the current body.
+
+        This danger-envelope query ignores readiness, ammo, energy and current
+        torso yaw, and never changes charge/aim-commitment state. ``line_clear``
+        may reuse the caller's current actor LOS: True avoids duplicate direct
+        world rays, False rejects the actor. Such eye/body LOS is conservative
+        for proximity policy; it never authorizes fire through a blocked barrel.
+        None checks the direct world path here. Mortars always check their arc.
+        An exhausted optional wall deadline returns None (unverified), which
+        proximity policy must treat conservatively as near, never as quiet.
+        """
+        if target is None or line_clear is False:
+            return False
+        if deadline is not None and time.perf_counter() >= deadline:
+            return None
+        me = obs["self"]
+        own = self._self_stats(me)
+        _, height = self._body(target)
+        center = list(target["pos"])
+        center[2] += height * 0.5
+        origin = list(me["pos"])
+        origin[2] += own.get("muzzle_height", 7.0)
+        limits = (own.get("min_pitch", -0.7), own.get("max_pitch", 1.3))
+        weapons = [w for w in me.get("weapons", [])[:2] if w]
+        # Direct weapons normally answer cheaply; avoid a redundant mortar arc.
+        weapons.sort(key=lambda w: w["kind"] == "mortar")
+        horizontal = math.dist(origin[:2], center[:2])
+        for weapon in weapons:
+            kind, stats = weapon["kind"], self._stats(weapon)
+            if kind == "mortar":
+                if deadline is not None and time.perf_counter() >= deadline:
+                    return None
+                mortar_origin = list(me["pos"])
+                mortar_origin[2] += own.get("height", 9.0) + 0.5
+                solution = self._mortar_solution(stats, mortar_origin, center,
+                                                 [0, 0, 0], me, own, limits, deadline=deadline)
+                if deadline is not None and time.perf_counter() >= deadline:
+                    return None
+            else:
+                # A horizontal distance beyond even the extended barrel's
+                # reach cannot be repaired by any pitch/body-height choice.
+                if horizontal - own["radius"] - 0.5 > stats.get("range", 230.0):
+                    continue
+                solution = self._direct_solution(kind, stats, origin, center,
+                    [0, 0, 0], own["radius"] + 0.5, limits, height,
+                    check_world=line_clear is not True)
+            if solution and solution["clear"]:
+                return True
+        return False
+
+    def plan(self, obs, target, allow_fire=True, emergency=False, allow_partial_reload=True):
         me = obs["self"]
         weapons = list(me.get("weapons", [None, None]))[:2]
         weapons += [None] * (2 - len(weapons))
@@ -256,13 +335,13 @@ class Combat:
         actual = list(me.get("aim", [0.0, 0.0]))
         action = {"aim": actual, "fire": [False, False], "reload": False}
         now = float(obs.get("t", obs.get("tick", 0) * self.sim_dt))
-        # Early reload while recovering or with no target; there is no benefit
-        # to partial magazines during an otherwise idle interval.
+        # Root proximity policy controls topping up. An empty magazine still
+        # needs a reload even while an enemy is nearby.
         for weapon in weapons:
             if weapon and weapon["kind"] == "gun" and not weapon.get("reload", 0):
                 stats = self._stats(weapon)
                 ammo = weapon.get("ammo", stats.get("mag", 12))
-                if ammo <= 0 or ((target is None or not allow_fire) and ammo < stats.get("mag", 12)):
+                if ammo <= 0 or (allow_partial_reload and (target is None or not allow_fire) and ammo < stats.get("mag", 12)):
                     action["reload"] = True
         if target is None or not allow_fire:
             self._full_since.clear()
@@ -373,7 +452,7 @@ class Combat:
                 reload_ending = 0 < weapon.get("reload", 0) <= self.action_dt + 1e-6
                 action["fire"][slot] = bool(ready[slot] and aligned and weapon.get("reload", 0) <= self.action_dt + 1e-6
                                              and (weapon.get("ammo", 1) > 0 or reload_ending) and not action["reload"])
-                if not valid and not weapon.get("reload", 0) and weapon.get("ammo", 99) <= 3:
+                if allow_partial_reload and not valid and not weapon.get("reload", 0) and weapon.get("ammo", 99) <= 3:
                     action["reload"] = True
             elif kind == "laser":
                 charge = float(weapon.get("charge", 0.0))
@@ -397,9 +476,9 @@ class Combat:
                     action["fire"][slot] = bool(ready[slot] and valid and not emergency
                                                  and abs(angle_delta(sol["aim"][0], actual_next[0])) < 0.6)
             elif kind == "lightning":
-                # Lightning checks horizontal yaw only. The documented cone
-                # ambiguity is resolved conservatively as half the full angle.
-                cone = math.radians(stats.get("cone_deg", 30.0)) * 0.5
+                # The protocol says "within cone_deg of your aim yaw": this
+                # is the allowed yaw deviation, not a full cone to halve.
+                cone = math.radians(stats.get("cone_deg", 30.0))
                 energy_reserve = 18.0 if emergency else 8.0
                 action["fire"][slot] = bool(ready[slot] and valid
                     and abs(angle_delta(sol["aim"][0], actual_next[0])) <= cone

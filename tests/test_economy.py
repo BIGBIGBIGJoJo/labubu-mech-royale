@@ -27,21 +27,20 @@ class EconomyTests(unittest.TestCase):
         item.update(values)
         return item
 
-    def test_recovery_collects_cube_along_retreat(self):
+    def test_quiet_recovery_collects_nearby_healing_cube(self):
         self.obs["self"]["hp"] = 500
-        self.obs["mechs"] = [self.enemy(50)]
         self.obs["cubes"] = [{"id": 5001, "pos": [-15, 0, 0]}]
         action = self.bot.act(self.obs)
         self.assertTrue(self.bot.recover)
         self.assertEqual(self.bot.resource_key, ("cubes", 5001))
         self.assertLess(action["move"][0], -0.5)
 
-    def test_recovery_rejects_cube_toward_close_attacker(self):
+    def test_near_combat_preempts_cube_detour_at_low_health(self):
         self.obs["self"]["hp"] = 500
         self.obs["mechs"] = [self.enemy(50)]
         self.obs["cubes"] = [{"id": 5001, "pos": [15, 0, 0]}]
         self.bot.act(self.obs)
-        self.assertTrue(self.bot.recover)
+        self.assertFalse(self.bot.recover)
         self.assertIsNone(self.bot.resource_key)
 
     def test_quiet_recovery_does_not_start_crate_farming(self):
