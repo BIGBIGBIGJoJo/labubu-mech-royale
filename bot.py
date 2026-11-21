@@ -9,6 +9,7 @@ import mechfight as mf
 from arena_map import ArenaMap
 from combat import Combat
 from tactical import TacticalPlanner
+from ground_reachability import GroundReachability, NO, YES
 
 
 def distance(a, b):
@@ -30,6 +31,7 @@ class Bot:
     def __init__(self, hello):
         self.config = hello["config"]
         self.map = ArenaMap(hello["map"]["dir"], self.config)
+        self.ground_routes = GroundReachability(self.map)
         self.combat = Combat(self.config, self.map.line_of_fire)
         self.tactical = TacticalPlanner(self.config, self.map)
         self.slot = hello["slot"]
@@ -263,16 +265,29 @@ class Bot:
     def safe_goal(self, obs, threats, s, deadline):
         p = obs["self"]["pos"]
         center, radius = self.zone_future(obs, 22)
+        routes = self.ground_routes.begin(p, s["radius"], s["height"], deadline)
+        previous = None
+        if (self.goal is not None and self.goal_kind in ("rotate", "recover", "position")
+                and distance(self.goal, center) + s["radius"] <= radius
+                and routes.classify(self.goal) == YES):
+            previous = list(self.goal)
         if not self.recover and not threats:
             # Explore locally without repeatedly selecting the current point.
             options = []
             for i in range(12):
+                if time.perf_counter() >= deadline:
+                    break
                 angle = 2 * math.pi * i / 12 + self.slot * .17
                 point = [p[0] + 75 * math.cos(angle), p[1] + 75 * math.sin(angle), 0]
                 if distance(point, center) + s["radius"] + 12 > radius:
                     continue
                 point[2] = self.map.ground_height(*point[:2])
                 if not self.map.point_clear(point, s["radius"], s["height"]):
+                    continue
+                reachable = routes.classify(point)
+                if routes.budget_exhausted:
+                    break
+                if reachable == NO:
                     continue
                 cell = (int(point[0] // 35), int(point[1] // 35))
                 score = self.visited.get(cell, 0) * 30 + distance(point, center) * .03
@@ -302,6 +317,11 @@ class Bot:
         for point in candidates:
             if time.perf_counter() > deadline:
                 break
+            reachable = routes.classify(point)
+            if routes.budget_exhausted:
+                break
+            if reachable == NO:
+                continue
             cost = self.position_cost(point, threats, center, radius, s["radius"], self.recover, s["muzzle_height"])
             cost += distance(point, p) * .22
             if not self.recover:
@@ -309,6 +329,10 @@ class Bot:
             if cost < score:
                 best, score = point, cost
         if distance(best, center) + s["radius"] > radius:
+            # Keep a revalidated in-zone objective when optional selection ran
+            # out of time; a radial clamp can land on unreachable high ground.
+            if previous is not None:
+                return previous
             u = unit(best[0] - center[0], best[1] - center[1])
             r = max(0, radius - s["radius"] - 15)
             best = [center[0] + r * u[0], center[1] + r * u[1], self.map.ground_height(center[0] + r * u[0], center[1] + r * u[1])]
