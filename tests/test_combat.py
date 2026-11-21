@@ -38,6 +38,14 @@ def enemy(x=100, y=0, velocity=None):
             "vel": velocity or [0, 0, 0], "cubes": 0, "hp": 1400}
 
 
+def low_wall_clear(a, b):
+    """Thin wall at x=95, top 7.9: a distant mech's upper body is exposed."""
+    if min(a[0], b[0]) <= 95 <= max(a[0], b[0]) and a[0] != b[0]:
+        fraction = (95 - a[0]) / (b[0] - a[0])
+        return a[2] + fraction * (b[2] - a[2]) > 7.9
+    return True
+
+
 class CombatTests(unittest.TestCase):
     def test_intercept_stationary_and_out_running(self):
         self.assertAlmostEqual(combat.intercept_time([100, 0, 0], [0, 0, 0], 250), 0.4)
@@ -139,11 +147,118 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(action["fire"], [False, False])
 
     def test_upper_body_can_be_targeted_over_low_cover(self):
-        controller = combat.Combat(CONFIG, lambda a, b: b[2] >= 8.0)
+        controller = combat.Combat(CONFIG, low_wall_clear)
         obs = observation(weapon("gun"))
         action = controller.plan(obs, enemy())
         self.assertGreater(action["aim"][1], 0.0)
         self.assertTrue(action["fire"][0])
+
+    def test_gun_waits_for_actual_ray_to_clear_low_wall(self):
+        controller = combat.Combat(CONFIG, low_wall_clear)
+        obs = observation(weapon("gun"))
+        obs["self"]["aim"] = [0, -0.2]
+        action = controller.plan(obs, enemy())
+        self.assertGreater(action["aim"][1], 0)
+        self.assertFalse(action["fire"][0])
+        obs["self"]["aim"] = controller._slewed(
+            obs["self"]["aim"], action["aim"], obs["self"]["stats"], 0.1)
+        obs["t"] += 0.1
+        self.assertTrue(controller.plan(obs, enemy())["fire"][0])
+
+    def test_gun_ready_in_second_frame_uses_that_frames_clear_ray(self):
+        controller = combat.Combat(CONFIG, low_wall_clear)
+        obs = observation(weapon("gun", cooldown=0.09))
+        obs["self"]["aim"] = [0, -0.2]
+        # Frame one is obstructed, but the gun cannot fire until frame two.
+        self.assertTrue(controller.plan(obs, enemy())["fire"][0])
+
+    def test_laser_holds_until_actual_ray_clears_low_wall(self):
+        controller = combat.Combat(CONFIG, low_wall_clear)
+        obs = observation(weapon("laser", charge=0.75))
+        obs["self"]["aim"] = [0, -0.2]
+        action = controller.plan(obs, enemy())
+        self.assertTrue(action["fire"][0])
+        obs["self"]["aim"] = controller._slewed(
+            obs["self"]["aim"], action["aim"], obs["self"]["stats"], 0.1)
+        obs["t"] += 0.1
+        self.assertFalse(controller.plan(obs, enemy())["fire"][0])
+
+    def test_gun_validates_every_launch_in_held_action(self):
+        target = enemy(100, 0, [0, 20, 0])
+        obs = observation(weapon("gun"), weapon("laser", charge=0.75))
+        obs["self"]["stats"]["turn_rate"] = 0.8
+        obs["self"]["aim"] = [0.12, -0.025]
+        # The laser owns aim. On frame one the slewing torso still leads the
+        # target enough for the gun; on frame two it no longer does.
+        self.assertTrue(combat.Combat(CONFIG).plan(obs, target)["fire"][0])
+        obs["self"]["weapons"][0]["stats"]["cooldown"] = 0.05
+        self.assertFalse(combat.Combat(CONFIG).plan(obs, target)["fire"][0])
+
+    def test_actual_ray_stops_at_near_target_surface(self):
+        # A different body point from the commanded point must be checked only
+        # until impact, not extended through the body into further geometry.
+        controller = combat.Combat(CONFIG, lambda a, b: max(a[0], b[0]) < 99)
+        solution = {"point": [100, 0, 4.5], "muzzle": [0, 0, 7],
+                    "center_z": 4.5, "barrel_offset": 3.0, "clear": True}
+        self.assertTrue(controller._actual_ray_clear([0.01, -0.025], solution, 2.5, 9))
+
+    def test_laser_origin_matches_recorded_current_server_beam(self):
+        # Recorded enemy beam: the firing frame precedes this observation by
+        # one physics step. Cube-scaled muzzle height has no pitch extension.
+        feet = [-28.88, 80.64, 41.03]
+        velocity = [-2.74, 9.23, 6.7]
+        start, end = [-24.32, 78.31, 53.29], [127.68, 14.2, 5.86]
+        muzzle = [feet[i] - 0.05 * velocity[i] for i in range(3)]
+        muzzle[2] += 7 * 1.8
+        actual = combat.Combat._barrel_origin(muzzle, combat.point_aim(start, end), 5)
+        self.assertLess(math.dist(actual, start), 0.02)
+
+    def test_gun_origin_matches_recorded_current_server_projectile(self):
+        feet, velocity = [-31.41, 88.96, 34.52], [0.23, 1.14, -16.3]
+        projectile, projectile_velocity = [-30.05, 60.07, 40.53], [11.43, -240.61, -74.03]
+        muzzle = [feet[i] - 0.05 * velocity[i] for i in range(3)]
+        muzzle[2] += 7 * 1.8
+        actual = combat.Combat._barrel_origin(muzzle, [-1.528, -0.311], 5)
+        recorded = [projectile[i] - 0.1 * projectile_velocity[i] for i in range(3)]
+        self.assertLess(math.dist(actual, recorded), 0.05)
+
+    def test_high_angle_aim_reaches_target_from_horizontal_barrel(self):
+        controller = combat.Combat(CONFIG)
+        solution = controller._direct_solution("laser", CONFIG["weapons"]["laser"],
+            [0, 0, 7], [12, 0, 14.5], [0, 0, 0], 3, (-0.7, 1.3), 9)
+        self.assertIsNotNone(solution)
+        pitch = solution["aim"][1]
+        # Independent ray geometry of the observed server's launch position.
+        barrel_x = 3 * math.cos(pitch)
+        target_z = 7 + (12 - barrel_x) * math.tan(pitch)
+        self.assertAlmostEqual(target_z, solution["point"][2], places=5)
+
+    def test_moving_shooter_aims_from_firing_frame_position(self):
+        for cooldown, delay in ((0, 0.05), (0.09, 0.1)):
+            with self.subTest(cooldown=cooldown):
+                obs = observation(weapon("gun", cooldown=cooldown))
+                obs["self"]["vel"] = [0, 20, 0]
+                action = combat.Combat(CONFIG).plan(obs, enemy(30))
+                self.assertAlmostEqual(action["aim"][0], math.atan2(-20 * delay, 30), places=6)
+
+    def test_shooter_velocity_changes_launch_origin_not_bullet_velocity(self):
+        obs = observation(weapon("gun"))
+        obs["self"]["vel"] = [0, 20, 0]
+        target = enemy(150)
+        action = combat.Combat(CONFIG).plan(obs, target)
+        # No additional sideways correction for the projectile's ~0.6 s flight.
+        self.assertAlmostEqual(action["aim"][0], math.atan2(-1, 150), places=6)
+
+    def test_horizontal_barrel_cannot_cross_cover_below_clear_aim(self):
+        def clear(a, b):
+            if min(a[0], b[0]) <= 1 <= max(a[0], b[0]) and a[0] != b[0]:
+                return a[2] + (b[2] - a[2]) * (1 - a[0]) / (b[0] - a[0]) > 8
+            return True
+        obs = observation(weapon("gun"))
+        obs["self"]["aim"] = [0, 0.9]
+        target = enemy(6)
+        target["pos"][2] = 10
+        self.assertFalse(combat.Combat(CONFIG, clear).plan(obs, target)["fire"][0])
 
     def test_recovery_releases_laser_and_reloads_gun(self):
         obs = observation(weapon("gun", ammo=6), weapon("laser", charge=0.5))
@@ -234,6 +349,14 @@ class CombatTests(unittest.TestCase):
         self.assertTrue(controller.plan(obs, enemy(30))["fire"][0])
         obs["self"]["energy"] = 5
         self.assertFalse(controller.plan(obs, enemy(30))["fire"][0])
+
+    def test_lightning_cone_is_documented_deviation_from_aim(self):
+        for degrees, expected in ((20, True), (29, True), (31, False)):
+            with self.subTest(degrees=degrees):
+                obs = observation(weapon("lightning"))
+                obs["self"]["stats"]["turn_rate"] = 0
+                obs["self"]["aim"][0] = math.radians(degrees)
+                self.assertEqual(combat.Combat(CONFIG).plan(obs, enemy(30))["fire"][0], expected)
 
     def test_lightning_can_hit_low_crate_by_yaw(self):
         target = {"kind": "crate", "id": 1001, "pos": [5, 0, 0], "hp": 300}

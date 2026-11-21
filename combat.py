@@ -149,14 +149,102 @@ class Combat:
         return (abs(angle_delta(solution["aim"][0], actual_next[0])) <= yaw_tolerance
                 and pitch_low <= actual_next[1] <= pitch_high)
 
+    def _actual_ray_clear(self, actual_aim, solution, radius, height, projectile_radius=0.0):
+        """Check the ray that can fire, not just the requested body point.
+
+        Alignment permits any hit inside the body. Cover can hide part of that
+        interval while the commanded upper/lower-body point remains clear.
+        Include the muzzle extension in the segment, as in _direct_solution.
+        """
+        muzzle = solution["muzzle"]
+        origin = self._barrel_origin(muzzle, actual_aim, solution["barrel_offset"])
+        vec = direction(actual_aim)
+        point = solution["point"]
+        horizontal = math.dist(origin[:2], point[:2])
+        length = horizontal / max(1e-8, math.hypot(vec[0], vec[1]))
+        end = [origin[i] + vec[i] * length for i in range(3)]
+        # Once slew is complete this is the already checked solution segment.
+        if math.dist(end, point) < 1e-6:
+            return solution["clear"]
+        if not self._clear(muzzle, origin):
+            return False
+        # Intersect the ray with the target cylinder. Check only to its near
+        # surface; geometry behind an already hit target must not block fire.
+        dx, dy = origin[0] - point[0], origin[1] - point[1]
+        a = vec[0] * vec[0] + vec[1] * vec[1]
+        b = 2.0 * (dx * vec[0] + dy * vec[1])
+        c = dx * dx + dy * dy - (radius + projectile_radius) ** 2
+        enter, leave = 0.0, float("inf")
+        if a < 1e-12:
+            if c > 0:
+                return False
+        else:
+            disc = b * b - 4.0 * a * c
+            if disc < 0:
+                return False
+            root = math.sqrt(disc)
+            enter = max(enter, (-b - root) / (2.0 * a))
+            leave = min(leave, (-b + root) / (2.0 * a))
+        center_z = solution.get("center_z", point[2])
+        low = center_z - height * 0.5 - projectile_radius
+        high = center_z + height * 0.5 + projectile_radius
+        if abs(vec[2]) < 1e-12:
+            if not low <= origin[2] <= high:
+                return False
+        else:
+            z_enter, z_leave = sorted(((low - origin[2]) / vec[2], (high - origin[2]) / vec[2]))
+            enter, leave = max(enter, z_enter), min(leave, z_leave)
+        if enter > leave or leave < 0 or not math.isfinite(enter):
+            return False
+        endpoint = [origin[i] + enter * vec[i] for i in range(3)]
+        return self._clear(origin, endpoint)
+
+    @staticmethod
+    def _barrel_origin(muzzle, aim, offset):
+        # Current-server beam starts and newborn bullets retain muzzle height.
+        # Only x/y receive the radius+0.5 extension (not offset*sin(pitch)).
+        vec = direction(aim)
+        return [muzzle[0] + offset * vec[0], muzzle[1] + offset * vec[1], muzzle[2]]
+
+    @staticmethod
+    def _barrel_aim(muzzle, point, offset):
+        """Solve pitch with the measured horizontal-only barrel extension."""
+        dx, dy, dz = (point[i] - muzzle[i] for i in range(3))
+        distance = math.hypot(dx, dy)
+        pitch = math.atan2(dz, max(1e-6, distance - offset))
+        # z(point)-z(muzzle) = distance*tan(pitch)-offset*sin(pitch).
+        # Fixed iterations keep close, elevated shots bounded and accurate.
+        for _ in range(5):
+            pitch = max(-1.55, min(1.55, pitch))
+            cosine = math.cos(pitch)
+            slope = distance / (cosine * cosine) - offset * cosine
+            if abs(slope) < 1e-8:
+                break
+            error = distance * math.tan(pitch) - offset * math.sin(pitch) - dz
+            pitch -= error / slope
+        return [math.atan2(dy, dx), pitch]
+
+    def _gun_fire_times(self, weapon, stats):
+        """All launch frames while one trigger command is held."""
+        reloading = max(0.0, float(weapon.get("reload", 0.0)))
+        next_at = max(0.0, float(weapon.get("cooldown", 0.0)), reloading)
+        ammo = int(stats.get("mag", 12) if reloading else weapon.get("ammo", 1))
+        cooldown = max(0.0, float(stats.get("cooldown", 0.24)))
+        for frame in range(1, max(1, round(self.action_dt / self.sim_dt)) + 1):
+            delay = frame * self.sim_dt
+            if ammo > 0 and delay + 1e-6 >= next_at:
+                yield delay
+                ammo -= 1
+                next_at = delay + cooldown
+
     def _direct_solution(self, kind, stats, origin, center, velocity, barrel_offset, limits, target_height):
         speed = float(stats.get("speed", 252.0))
-        # All shots have a small muzzle extension. Re-solve the gun intercept
-        # twice after applying it; a translated origin matters at close range.
+        # Re-solve the intercept after the measured horizontal muzzle extension;
+        # this changes both flight time and pitch, especially at close range.
         shot_origin = list(origin)
         flight = 0.0
         predicted = list(center)
-        for _ in range(2):
+        for _ in range(4):
             if kind == "gun":
                 relative = [center[i] - shot_origin[i] for i in range(3)]
                 flight = intercept_time(relative, velocity, speed)
@@ -167,42 +255,51 @@ class Combat:
                 # Large cube-scaled mechs can be too tall to aim at another
                 # actor's center at short range while its upper body remains
                 # hittable. Intersect the pitch envelope with the body interior.
-                horizontal = math.dist(shot_origin[:2], predicted[:2])
+                horizontal = math.dist(origin[:2], predicted[:2])
                 low = max(predicted[2] - target_height * 0.40,
-                          shot_origin[2] + math.tan(limits[0]) * horizontal)
+                          origin[2] + math.tan(limits[0]) * horizontal - barrel_offset * math.sin(limits[0]))
                 high = min(predicted[2] + target_height * 0.40,
-                           shot_origin[2] + math.tan(limits[1]) * horizontal)
+                           origin[2] + math.tan(limits[1]) * horizontal - barrel_offset * math.sin(limits[1]))
                 if low > high + 1e-8:
                     return None
                 predicted[2] = max(low, min(high, predicted[2]))
-            aim = point_aim(shot_origin, predicted)
-            vec = direction(aim)
-            shot_origin = [origin[i] + barrel_offset * vec[i] for i in range(3)]
-        aim = point_aim(shot_origin, predicted)
+            aim = self._barrel_aim(origin, predicted, barrel_offset)
+            if kind == "lightning":
+                aim[1] = max(limits[0], min(limits[1], aim[1]))
+            shot_origin = self._barrel_origin(origin, aim, barrel_offset)
         distance = math.dist(shot_origin, predicted)
         if distance > stats.get("range", 230.0) or (kind != "lightning" and not limits[0] - 1e-7 <= aim[1] <= limits[1] + 1e-7):
             return None
+        if kind != "lightning":
+            ray_aim = point_aim(shot_origin, predicted)
+            if (abs(angle_delta(ray_aim[0], aim[0])) > 1e-6
+                    or abs(ray_aim[1] - aim[1]) > 1e-6):
+                # Overlapping horizontal footprints can have no forward root.
+                # Never return a numerically unresolved barrel solution.
+                return None
         aim[1] = max(limits[0], min(limits[1], aim[1]))
         # Check the muzzle extension as well: a wall can shorten the barrel.
-        clear = self._clear(origin, predicted)
+        clear = self._clear(origin, shot_origin) and self._clear(shot_origin, predicted)
         center_z = center[2] + velocity[2] * flight
         if not clear and kind in ("gun", "laser"):
             # A remembered actor's center may be hidden by a low wall while a
             # meaningful part of its upper or lower body remains hittable.
             for height_fraction in (0.39, -0.39):
                 alternate = [predicted[0], predicted[1], center_z + target_height * height_fraction]
-                alternate_aim = point_aim(origin, alternate)
-                if not limits[0] <= alternate_aim[1] <= limits[1] or not self._clear(origin, alternate):
+                alternate_aim = self._barrel_aim(origin, alternate, barrel_offset)
+                if not limits[0] <= alternate_aim[1] <= limits[1]:
                     continue
-                vec = direction(alternate_aim)
-                alternate_origin = [origin[i] + barrel_offset * vec[i] for i in range(3)]
+                alternate_origin = self._barrel_origin(origin, alternate_aim, barrel_offset)
+                if not self._clear(origin, alternate_origin) or not self._clear(alternate_origin, alternate):
+                    continue
                 alternate_distance = math.dist(alternate_origin, alternate)
                 if alternate_distance > stats.get("range", 230.0):
                     continue
                 predicted, shot_origin, aim = alternate, alternate_origin, alternate_aim
                 distance, clear = alternate_distance, True
                 break
-        return {"aim": aim, "point": predicted, "origin": shot_origin,
+        return {"aim": aim, "point": predicted, "origin": shot_origin, "muzzle": origin,
+                "barrel_offset": barrel_offset,
                 "horizontal": math.dist(shot_origin[:2], predicted[:2]),
                 "distance": distance, "clear": clear, "flight": flight, "center_z": center_z}
 
@@ -301,7 +398,15 @@ class Combat:
                 # Do not perform arc checks for a weapon that cannot shoot.
                 sol = self._mortar_solution(stats, mortar_origin, launch_target, velocity, me, own, limits) if ready[slot] else None
             else:
-                sol = self._direct_solution(kind, stats, origin, launch_target, velocity, own["radius"] + 0.5, limits, height)
+                # Current-server shots use the shooter position after movement
+                # in their firing frame. The final movement command is chosen
+                # later by the root policy, so constant-velocity prediction is
+                # an explicit short-horizon approximation (not velocity added
+                # to the projectile, which recorded bullets do not inherit).
+                own_velocity = me.get("vel", [0.0, 0.0, 0.0])
+                launch_origin = [origin[i] + own_velocity[i] * fire_delay[slot] for i in range(3)]
+                sol = self._direct_solution(kind, stats, launch_origin, launch_target, velocity,
+                                             own["radius"] + 0.5, limits, height)
             if sol:
                 solutions[slot] = sol
 
@@ -368,8 +473,26 @@ class Combat:
             valid = bool(sol and sol["clear"])
             actual_next = self._slewed(actual, action["aim"], own, fire_delay[slot])
             if kind == "gun":
-                aligned = valid and self._aligned(actual_next, sol, radius, height,
+                aligned = valid
+                if aligned and ready[slot] and not action["reload"]:
+                    # Usually only one shot fits in the action. A faster live
+                    # cooldown can fire in both frames, each at a different aim
+                    # and target position; a single trigger must be safe for all.
+                    for delay in self._gun_fire_times(weapon, stats):
+                        shot = sol
+                        if abs(delay - fire_delay[slot]) > 1e-7:
+                            launch_target = [center[i] + velocity[i] * delay for i in range(3)]
+                            launch_origin = [origin[i] + me.get("vel", [0, 0, 0])[i] * delay for i in range(3)]
+                            shot = self._direct_solution(kind, stats, launch_origin, launch_target, velocity,
+                                                         own["radius"] + 0.5, limits, height)
+                        shot_aim = self._slewed(actual, action["aim"], own, delay)
+                        if not (shot and shot["clear"]
+                                and self._aligned(shot_aim, shot, radius, height,
                                                   self.config.get("projectile", {}).get("gun_radius", 0.3))
+                                and self._actual_ray_clear(shot_aim, shot, radius, height,
+                                                          self.config.get("projectile", {}).get("gun_radius", 0.3))):
+                            aligned = False
+                            break
                 reload_ending = 0 < weapon.get("reload", 0) <= self.action_dt + 1e-6
                 action["fire"][slot] = bool(ready[slot] and aligned and weapon.get("reload", 0) <= self.action_dt + 1e-6
                                              and (weapon.get("ammo", 1) > 0 or reload_ending) and not action["reload"])
@@ -378,7 +501,8 @@ class Combat:
             elif kind == "laser":
                 charge = float(weapon.get("charge", 0.0))
                 full = float(stats.get("charge", 0.75))
-                aligned = valid and self._aligned(actual_next, sol, radius, height)
+                aligned = (valid and self._aligned(actual_next, sol, radius, height)
+                           and (charge <= 0 or self._actual_ray_clear(actual_next, sol, radius, height)))
                 if charge >= full - 1e-6:
                     self._full_since.setdefault(slot, now)
                 else:
@@ -397,9 +521,9 @@ class Combat:
                     action["fire"][slot] = bool(ready[slot] and valid and not emergency
                                                  and abs(angle_delta(sol["aim"][0], actual_next[0])) < 0.6)
             elif kind == "lightning":
-                # Lightning checks horizontal yaw only. The documented cone
-                # ambiguity is resolved conservatively as half the full angle.
-                cone = math.radians(stats.get("cone_deg", 30.0)) * 0.5
+                # The protocol specifies deviation from aim yaw, not full width:
+                # "within cone_deg 30 degrees of your aim yaw".
+                cone = math.radians(stats.get("cone_deg", 30.0))
                 energy_reserve = 18.0 if emergency else 8.0
                 action["fire"][slot] = bool(ready[slot] and valid
                     and abs(angle_delta(sol["aim"][0], actual_next[0])) <= cone
