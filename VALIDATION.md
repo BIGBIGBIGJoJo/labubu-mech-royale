@@ -13,9 +13,10 @@ Verified on November 21, 2026. Official score means mean `16 - place` over
 | BB-12F2E201 | 39b6d509af8e82b0ceb9e1c430dd964674d7488e | **4.75** | Accepted; current best and automatically selected entry |
 | BB-81C2BC51 | 373f70986d2ffe9077d7afc1a8c773097b4f4ede | 4.63 | Accepted; lower than the selected best |
 | BB-1B3ACBAA | 88488f29e2b56ea82b33930793a6506c91efc21a | 2.46 | Accepted; selective policy underperformed in coordinated practice |
+| BB-391F3E46 | e5f021a2a0364a1db2d162afe0e3a29b9ed8b792 | 2.29 | Accepted; route/reload fixes did not improve practice score |
 
 The strategy-v2 candidate improved 4.19 to 4.75 (approximately 13.4%).
-Six submissions have been accepted. The hourly quota replenishes over time;
+Seven submissions have been accepted. The hourly quota replenishes over time;
 check the authenticated panel before any further attempt.
 
 The automatically selected entry is the commit above; this is **not** a claim
@@ -25,6 +26,31 @@ Source: authenticated team's submission panel on the
 [official track page](https://www.joinbuilders.org/buildathon/tracks/builders).
 The team page automatically enters its best accepted score unless another
 submission is explicitly selected. No tournament placement is guaranteed.
+
+## Selective-v3 energy candidate
+
+The separate [energy experiment](BOOST_PLAN.md) adds observed-energy boost
+hysteresis and validated emergency exceptions. It also corrects recognition of
+documented NPC projectiles in finish safety. It keeps the prior route/reload
+corrections and the confirmed engagement policy.
+
+- 276 behavioral, weapon, geometry and orchestration tests pass.
+- Restricted Docker checker: 300/300 timely replies, zero invalid lines or wrong
+  ticks, p99 13.4 ms, maximum 21.1 ms, ready in 1,400 ms. Two older queued
+  observations were discarded; the checker passed.
+- Host stress: 540 schema-valid decisions, all below 50 ms. Maximum was 47.44 ms
+  in one dense recovery case; other scenario maxima were below 32 ms. The Docker
+  build and private diagnostic ran concurrently with this host stress check.
+- Actual-selector energy and map measurements are described in BOOST_PLAN.md.
+
+These checks establish local behavior and conformance, not an official score.
+
+The frozen private diagnostic finished 3rd with zero kills and four cubes at
+122.7 seconds. It dealt 1,719 damage, took 1,960, and took no zone damage.
+All 1,225 actions computed below 50 ms (maximum 33.07 ms), with zero policy
+errors. All 52 mech-trigger commands had explicit permission; the first followed
+an attributed attack at 107.2 seconds. No elective FINISH was selected.
+This uncontrolled private match does not establish practice strength.
 
 ## Selective-finish candidate verification
 
@@ -110,6 +136,11 @@ logged 131 authorized mech-trigger commands and no permission violations. Its
 first mech trigger followed attributed damage at 89.2 seconds. No FINISH was
 selected. This was a different random match, so the absence of zone damage does
 not establish a controlled before/after survival gain.
+
+The official follow-up result was **2.29**, below both the 2.46 selective baseline
+and retained 4.75 best. Local correctness evidence did not establish improved
+coordinated-practice strength. The next energy experiment remains separately
+specified in [BOOST_PLAN.md](BOOST_PLAN.md).
 
 ## Earlier strategy-v2 and v3 checks
 

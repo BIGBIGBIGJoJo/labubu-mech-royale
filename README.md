@@ -28,6 +28,7 @@ See [DESIGN.md](DESIGN.md) for the competition requirements, strategy,
 implementation plan, limits, and evaluation process.
 See [AGENT_STRATEGY_PLAN.md](AGENT_STRATEGY_PLAN.md) for the current **6.0** target,
 confirmed engagement policy, and movement/fire/orchestration responsibilities.
+See [BOOST_PLAN.md](BOOST_PLAN.md) for the current energy-management experiment.
 Earlier experiments remain documented in [STRATEGY_V2.md](STRATEGY_V2.md).
 
 - `bot.py`: strategy, recovery, upgrades, resource completion, and zone prediction.

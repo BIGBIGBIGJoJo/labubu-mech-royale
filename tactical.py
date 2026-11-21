@@ -34,8 +34,70 @@ class TacticalPlanner:
         self.dt=1.0/max(1.0,float(config.get("match",{}).get("tick_hz",20)))
         self.steps=max(2,int(round(0.6/self.dt)))
         self.horizon=self.steps*self.dt
+        self.action_dt=self.dt*max(1,int(config.get("match",{}).get("decide_every",2)))
         self.last_direction=(0.0,0.0)
         self.last_report={}
+        self.boost_recharging=None
+        self._boost_frame=None
+        self._boost_time=-float("inf")
+        self.lightning_escape_range=float(config["weapons"]["lightning"]["range"])
+        for upgrade in config.get("upgrades",()):
+            for effect in upgrade.get("effects",()):
+                if effect.get("path")=="weapons.lightning.range":
+                    for _ in range(int(upgrade.get("max",1))):
+                        self.lightning_escape_range=(self.lightning_escape_range+max(0,effect.get("add",0)))*max(1,effect.get("mul",1))
+
+    def _boost_permission(self,obs,stats,shot_energy):
+        """Update the observed-energy latch once; never assume a shot occurred."""
+        me=obs["self"]
+        low=35.0
+        high=min(65.0,float(me.get("max_energy",stats.get("energy",100))))
+        remaining=float(me["energy"])-shot_energy-stats["boost_drain"]*self.action_dt
+        frame=(obs.get("tick"),obs.get("t"))
+        now=float(obs.get("t",0))
+        if frame!=self._boost_frame or now<self._boost_time:
+            if self.boost_recharging is None or now<self._boost_time:
+                self.boost_recharging=me["energy"]<high
+            if remaining<low:
+                self.boost_recharging=True
+            elif me["energy"]>=high:
+                self.boost_recharging=False
+            self._boost_frame=frame
+            self._boost_time=now
+        grounded=me.get("grounded",True)
+        return grounded and not self.boost_recharging and remaining>=low, grounded and remaining>=12.0, high
+
+    def _pursuit_gain(self,walk,boost,threats,stats):
+        """Observed closing pursuer, with materially better boosted separation."""
+        start=walk[0]
+        for q in threats:
+            actor=q["actor"]
+            if not q.get("los") or actor.get("kind")!="mech":
+                continue
+            px,py=actor["pos"][:2]
+            vx,vy=actor.get("vel",(0,0,0))[:2]
+            dx,dy=start[1]-px,start[2]-py
+            distance=math.hypot(dx,dy)
+            if (vx*dx+vy*dy)/max(distance,.001)<2.0:
+                continue
+            enemy_radius=self.config["mech"]["radius"]*(1+self.config.get("cubes",{}).get("size_per_cube",.05)*actor.get("cubes",0))
+            danger=(self.lightning_escape_range+stats["radius"]+3 if "lightning" in actor.get("weapons",())
+                    else 30.0+stats["radius"]+enemy_radius)
+            enemy=(px+vx*self.horizon,py+vy*self.horizon)
+            walking=math.hypot(walk[-1][1]-enemy[0],walk[-1][2]-enemy[1])
+            boosted=math.hypot(boost[-1][1]-enemy[0],boost[-1][2]-enemy[1])
+            if walking<=danger and walking<distance-.5 and boosted-walking>=2.0:
+                return True
+        return False
+
+    def _boost_override(self,walk,boost,walk_bullet,boost_bullet,walk_beam,boost_beam,threats,stats):
+        if walk_bullet-boost_bullet>=max(12.0,self.config["weapons"]["gun"]["damage"]*.35):
+            return "projectile"
+        if walk_beam-boost_beam>=self.config["weapons"]["laser"]["damage"]*.05:
+            return "aimed_beam"
+        if self._pursuit_gain(walk,boost,threats,stats):
+            return "close_pursuer"
+        return None
 
     def rollout(self,me,direction,boost,stats):
         """Return states (t,x,y,z,vx,vy,vz,energy,grounded) at physics boundaries."""
@@ -304,14 +366,20 @@ class TacticalPlanner:
         return result
 
     def choose(self,obs,navigation,threats,stats,*,goal=None,recover=False,
-               urgent=False,spacing_boost=False,deadline=None):
+               urgent=False,spacing_boost=False,deadline=None,boost_emergency=False,shot_energy=0):
         begin=time.perf_counter()
+        shot_energy=max(0.0,float(shot_energy))
+        ordinary_boost,emergency_boost,boost_high=self._boost_permission(obs,stats,shot_energy)
+        boost_report={"boost_phase":"RECHARGING" if self.boost_recharging else "READY",
+                      "boost_low":35.0,"boost_high":boost_high,"shot_energy":shot_energy}
         deadline=min(deadline if deadline is not None else begin+.014,begin+.014)-.0015
         if deadline<=begin:
             self.last_report={"ms":(time.perf_counter()-begin)*1000,"candidates":0,
-                              "geometry_checked":0,"projectiles":0,"fallback":True}
+                              "geometry_checked":0,"projectiles":0,"fallback":True,
+                              "boost_reason":"deadline",**boost_report}
             return (0.0,0.0),False
         me=obs["self"]
+        planning_me=me if not shot_energy else {**me,"energy":max(0.0,me["energy"]-shot_energy)}
         # Rotation follows a validated route. Price routed progress against the
         # time spent in the damaging zone, rather than allowing a soft incoming
         # exposure estimate to keep backing away indefinitely. Actual shots,
@@ -334,15 +402,20 @@ class TacticalPlanner:
                 unique.append(direction)
                 seen.add(key)
         pressure=sorted(threats,key=lambda q:self._strength(q["actor"],q["d"]),reverse=True)[:3]
+        pursuers=threats[:16]
         tracks=self._projectiles(obs,min(deadline,begin+.0015))
-        allow_boost=me.get("grounded",True) and me["energy"]>(12 if urgent else 35)
+        # Recharge can be interrupted for a verified immediate benefit, not
+        # merely because rotation/recovery is active or progress would be faster.
+        possible_override=bool(tracks or any(q.get("los") and (q["actor"].get("charging") or q["d"]<self.lightning_escape_range+stats["radius"]+15) for q in pursuers))
+        allow_boost=emergency_boost and (ordinary_boost or boost_emergency or possible_override)
         ranked=[]
         cheap_deadline=min(deadline-.004,begin+.006)
         for direction in unique:
+            walking=None
             for boost in ((False,True) if allow_boost and direction!=(0.0,0.0) else (False,)):
                 if time.perf_counter()>=cheap_deadline and ranked:
                     break
-                path=self.rollout(me,direction,boost,stats)
+                path=self.rollout(planning_me,direction,boost,stats)
                 end=path[-1]
                 progress=(end[1]-me["pos"][0])*nav[0]+(end[2]-me["pos"][1])*nav[1]
                 cost=-route_weight*progress
@@ -355,17 +428,27 @@ class TacticalPlanner:
                     cost+=max(0,35-end[7])*.15
                 cost+=.3*(1-direction[0]*self.last_direction[0]-direction[1]*self.last_direction[1])
                 bullet=self.projectile_cost(path,tracks,stats)
-                cost+=bullet+self._zone_cost(path,obs,stats)+self._beam_cost(path,pressure,stats)
+                beam=self._beam_cost(path,pressure,stats)
+                reason="ready" if boost and ordinary_boost else "requested_emergency" if boost and boost_emergency else None
+                if not boost:
+                    walking=(path,bullet,beam)
+                elif reason is None:
+                    if walking is None:
+                        continue
+                    reason=self._boost_override(walking[0],path,walking[1],bullet,walking[2],beam,pursuers,stats)
+                    if reason is None:
+                        continue
+                cost+=bullet+self._zone_cost(path,obs,stats)+beam
                 exposure=self._exposure(path,pressure,stats,False,deadline)
                 cost+=exposure*exposure_weight
-                ranked.append((cost,direction,boost,path,bullet,exposure))
+                ranked.append((cost,direction,boost,path,bullet,exposure,walking,reason))
             if time.perf_counter()>=cheap_deadline:
                 break
         ranked.sort(key=lambda item:item[0])
         best=None
         checked=0
         # Exact geometry and incoming LOS are reserved for promising candidates.
-        for cost,direction,boost,path,bullet,exposure in ranked:
+        for cost,direction,boost,path,bullet,exposure,walking,reason in ranked:
             if time.perf_counter()>=deadline or checked>=6:
                 break
             checked+=1
@@ -373,6 +456,18 @@ class TacticalPlanner:
             corrected=self._geometry(path,stats,deadline,direction,boost,charging)
             if corrected is None:
                 continue
+            if boost and reason not in ("ready","requested_emergency"):
+                if checked>=6 or time.perf_counter()>=deadline:
+                    continue
+                checked+=1
+                safe_walk=self._geometry(walking[0],stats,deadline,direction,False,charging)
+                if safe_walk is None:
+                    continue
+                reason=self._boost_override(safe_walk,corrected,
+                    self.projectile_cost(safe_walk,tracks,stats),self.projectile_cost(corrected,tracks,stats),
+                    self._beam_cost(safe_walk,pressure,stats),self._beam_cost(corrected,pressure,stats),pursuers,stats)
+                if reason is None:
+                    continue
             adjusted=cost-bullet-exposure*exposure_weight
             adjusted+=self.projectile_cost(corrected,tracks,stats)
             adjusted+=self._exposure(corrected,pressure[:2],stats,True,deadline)*exposure_weight
@@ -380,7 +475,7 @@ class TacticalPlanner:
             if len(pressure)>2:
                 adjusted+=self._exposure(corrected,pressure[2:],stats,False,deadline)*exposure_weight
             if best is None or adjusted<best[0]:
-                best=(adjusted,direction,boost)
+                best=(adjusted,direction,boost,reason)
             if checked>=3 and not tracks and not any(q["actor"].get("charging") for q in pressure):
                 break
         if best is None:
@@ -391,5 +486,7 @@ class TacticalPlanner:
             result=(best[1],best[2])
             self.last_direction=best[1]
         self.last_report={"ms":(time.perf_counter()-begin)*1000,"candidates":len(ranked),
-                          "geometry_checked":checked,"projectiles":len(tracks),"fallback":best is None}
+                          "geometry_checked":checked,"projectiles":len(tracks),"fallback":best is None,
+                          "boost_reason":best[3] if best and best[2] else "recharging" if self.boost_recharging else "walk_selected",
+                          **boost_report}
         return result

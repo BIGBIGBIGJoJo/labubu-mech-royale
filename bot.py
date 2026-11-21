@@ -617,7 +617,8 @@ class Bot:
                 candidates.append((score, point, "drop", key, drop))
         return max(candidates, default=None, key=lambda c: c[0])
 
-    def movement(self, obs, navigation, threats, s, urgent, deadline, goal=None):
+    def movement(self, obs, navigation, threats, s, urgent, deadline, goal=None,
+                 boost_emergency=False, shot_energy=0.0):
         if time.perf_counter() >= deadline:
             # Keep a short verified route if optional tactical work has expired.
             path = self.tactical.rollout(obs["self"], navigation, False, s)[:4]
@@ -627,7 +628,8 @@ class Bot:
             return (0.0, 0.0), False
         return self.tactical.choose(obs, navigation, threats, s, goal=goal,
                                     recover=self.recover, urgent=urgent,
-                                    spacing_boost=self.spacing_boost, deadline=deadline)
+                                    spacing_boost=self.spacing_boost, deadline=deadline,
+                                    boost_emergency=boost_emergency, shot_energy=shot_energy)
 
     def act(self, obs):
         start = time.perf_counter()
@@ -769,7 +771,12 @@ class Bot:
                            if w and w["kind"] == "laser" else w)
                           for i, w in enumerate(me["weapons"])]
         motion_obs = {**obs, "self": {**me, "weapons": motion_weapons}}
-        move, boost = self.movement(motion_obs, navigation, threats, s, urgent, deadline, goal)
+        edge_center, edge_radius = self.zone_future(obs, 1.0)
+        boost_emergency = not me["in_zone"] or distance(p, edge_center) + s["radius"] + 1 > edge_radius
+        shot_energy = sum(w["stats"].get("energy", 3) for i, w in enumerate(me["weapons"])
+                          if w and w["kind"] == "lightning" and combat["fire"][i])
+        move, boost = self.movement(motion_obs, navigation, threats, s, urgent, deadline, goal,
+                                    boost_emergency=boost_emergency, shot_energy=shot_energy)
         if self.state == "FINISH":
             # Elective damage must not consume the movement reserve. The mortar
             # drain stat affects its victim; only lightning costs firing energy.

@@ -67,7 +67,8 @@ under sustained boost demand. A work-only energy model supports testing it, but
 does not establish a game-speed or score improvement. Any implementation must
 keep existing trajectory ranking, preserve the finish reserve, and permit a
 verified immediate escape without waiting to recharge. Test this separately from
-the rotation correction so its behavior and cost remain reviewable.
+the rotation correction so its behavior and cost remain reviewable. Its separate
+implementation and verification plan is [BOOST_PLAN.md](BOOST_PLAN.md).
 
 ## Acceptance and comparison
 

@@ -142,6 +142,8 @@ class TacticalTests(unittest.TestCase):
         stats['radius']*=scale
         stats['height']*=scale
         planner=TacticalPlanner(self.config,FlatMap())
+        # Isolate the rotation-scoring regression from energy-cycle phase.
+        planner.boost_recharging=False
         planner.last_direction=case['last_direction']
         # Test the bounded candidate set independent of scheduler jitter.
         with patch('tactical.time.perf_counter',return_value=0):
@@ -183,6 +185,124 @@ class TacticalTests(unittest.TestCase):
             direction,boost=planner.choose(self.obs,(1,0),[],self.stats,urgent=True,deadline=1)
         path=planner.rollout(self.me,direction,boost,self.stats)
         self.assertLessEqual(max(point[1] for point in path)+self.stats['radius'],5.5+1e-6)
+
+    def choose_energy(self,energy,**kwargs):
+        self.obs['tick']+=2
+        self.obs['t']+=.1
+        self.me['energy']=energy
+        with patch('tactical.time.perf_counter',return_value=0):
+            return self.planner.choose(self.obs,(1,0),[],self.stats,recover=True,deadline=1,**kwargs)
+
+    def test_boost_recharges_to65_instead_of_restarting_at35(self):
+        self.assertTrue(self.choose_energy(100)[1])
+        # At36 energy the next0.1s of boosting would fall below35.
+        self.assertFalse(self.choose_energy(36)[1])
+        self.assertTrue(self.planner.boost_recharging)
+        self.assertFalse(self.choose_energy(50)[1])
+        self.assertFalse(self.choose_energy(64.9)[1])
+        self.assertTrue(self.choose_energy(65)[1])
+        self.assertFalse(self.planner.boost_recharging)
+
+    def test_urgent_flag_alone_does_not_interrupt_recharge(self):
+        self.assertFalse(self.choose_energy(50,urgent=True)[1])
+        self.assertEqual(self.planner.last_report['boost_reason'],'recharging')
+
+    def test_explicit_emergency_has_no_recharge_delay_or_latch_reset(self):
+        self.assertTrue(self.choose_energy(30,urgent=True,boost_emergency=True)[1])
+        self.assertTrue(self.planner.boost_recharging)
+        self.assertEqual(self.planner.last_report['boost_reason'],'requested_emergency')
+        self.assertFalse(self.choose_energy(50,urgent=True)[1])
+        self.assertTrue(self.choose_energy(65)[1])
+
+    def test_next_action_reserves_live_boost_drain_and_scheduled_lightning(self):
+        self.choose_energy(100)
+        self.assertTrue(self.choose_energy(40,shot_energy=3)[1])
+        self.assertEqual(self.me['energy'],40)  # Planning does not mutate observation.
+        self.assertFalse(self.choose_energy(39,shot_energy=3)[1])
+        self.assertTrue(self.planner.boost_recharging)
+        self.assertFalse(self.choose_energy(16,urgent=True,boost_emergency=True,shot_energy=3)[1])
+        self.choose_energy(100)
+        self.stats['boost_drain']=25
+        self.assertFalse(self.choose_energy(37)[1])
+
+    def test_capacity_changes_cannot_make_ordinary_reserve_unreachable_silently(self):
+        self.me['max_energy']=50
+        self.assertTrue(self.choose_energy(50)[1])
+        self.assertEqual(self.planner.last_report['boost_high'],50)
+        self.me['max_energy']=34
+        self.assertFalse(self.choose_energy(34)[1])
+        self.assertTrue(self.planner.boost_recharging)
+
+    def test_concussion_energy_drop_enters_recharge_without_inventing_regen_clock(self):
+        self.choose_energy(100)
+        self.assertFalse(self.choose_energy(30)[1])
+        self.assertFalse(self.choose_energy(55)[1])
+        self.assertTrue(self.choose_energy(65)[1])
+
+    def test_emergency_does_not_enable_airborne_jets(self):
+        self.me['grounded']=False
+        self.assertFalse(self.choose_energy(100,urgent=True,boost_emergency=True)[1])
+
+    def test_repeated_observation_preserves_latch_state(self):
+        self.choose_energy(50)
+        frame=self.planner._boost_frame
+        with patch('tactical.time.perf_counter',return_value=0):
+            _,boost=self.planner.choose(self.obs,(1,0),[],self.stats,recover=True,deadline=1)
+        self.assertFalse(boost)
+        self.assertEqual(self.planner._boost_frame,frame)
+        self.assertTrue(self.planner.boost_recharging)
+
+    def test_projectile_avoidance_can_override_recharge(self):
+        self.me.update(energy=45,vel=[11.7,0,0])
+        self.obs['projectiles']=[{'kind':'gun','pos':[5.85,-126,4.5],'vel':[0,252,0]}]
+        with patch('tactical.time.perf_counter',return_value=0):
+            direction,boost=self.planner.choose(self.obs,(1,0),[],self.stats,recover=True,deadline=1)
+        self.assertTrue(boost)
+        self.assertEqual(self.planner.last_report['boost_reason'],'projectile')
+        self.assertTrue(self.planner.boost_recharging)
+        tracks=self.planner._projectiles(self.obs,time.perf_counter()+1)
+        walk=self.planner.rollout(self.me,direction,False,self.stats)
+        run=self.planner.rollout(self.me,direction,True,self.stats)
+        self.assertGreater(self.planner.projectile_cost(walk,tracks,self.stats)-self.planner.projectile_cost(run,tracks,self.stats),15)
+
+    def test_unverified_walking_comparison_cannot_authorize_override(self):
+        class InvalidWalking(TacticalPlanner):
+            def _geometry(self,path,stats,deadline,direction=None,boost=False,charging=False):
+                return path if boost else None
+        self.me.update(energy=45,vel=[11.7,0,0])
+        self.obs['projectiles']=[{'kind':'gun','pos':[5.85,-126,4.5],'vel':[0,252,0]}]
+        planner=InvalidWalking(self.config,FlatMap())
+        with patch('tactical.time.perf_counter',return_value=0):
+            direction,boost=planner.choose(self.obs,(1,0),[],self.stats,recover=True,deadline=1)
+        self.assertFalse(boost)
+        self.assertEqual(direction,(0,0))
+
+    def test_aimed_beam_benefit_can_override_recharge(self):
+        self.me.update(energy=45,vel=[0,11.7,0])
+        self.obs['zone']['dps']=100
+        actor={'id':3,'kind':'mech','pos':[-100,5,0],'vel':[0,0,0],'aim':[0,0],
+               'weapons':['laser'],'charging':True}
+        threats=[{'actor':actor,'d':100.1,'los':True,'risk':1}]
+        with patch('tactical.time.perf_counter',return_value=0):
+            _,boost=self.planner.choose(self.obs,(0,1),threats,self.stats,recover=True,urgent=True,deadline=1)
+        self.assertTrue(boost)
+        self.assertEqual(self.planner.last_report['boost_reason'],'aimed_beam')
+        self.assertTrue(self.planner.boost_recharging)
+
+    def test_close_pursuer_needs_observed_closing_and_separation_gain(self):
+        self.me.update(energy=45,vel=[11.7,0,0])
+        actor={'id':3,'kind':'mech','pos':[-60,0,0],'vel':[19.5,0,0],'aim':[0,0],
+               'weapons':['lightning']}
+        threats=[{'actor':actor,'d':60,'los':True,'risk':1}]
+        with patch('tactical.time.perf_counter',return_value=0):
+            _,boost=self.planner.choose(self.obs,(1,0),threats,self.stats,recover=True,deadline=1)
+        self.assertTrue(boost)
+        self.assertEqual(self.planner.last_report['boost_reason'],'close_pursuer')
+        actor['vel']=[0,0,0]
+        self.obs['tick']+=2
+        with patch('tactical.time.perf_counter',return_value=0):
+            _,boost=self.planner.choose(self.obs,(1,0),threats,self.stats,recover=True,deadline=1)
+        self.assertFalse(boost)
 
 
 if __name__=='__main__':
