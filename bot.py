@@ -9,6 +9,7 @@ import mechfight as mf
 from arena_map import ArenaMap
 from combat import Combat
 from tactical import TacticalPlanner
+from exposure import ExposureModel
 
 
 def distance(a, b):
@@ -32,6 +33,10 @@ class Bot:
         self.map = ArenaMap(hello["map"]["dir"], self.config)
         self.combat = Combat(self.config, self.map.line_of_fire)
         self.tactical = TacticalPlanner(self.config, self.map)
+        self.recovery_exposure = ExposureModel(self.config, lambda a, b: self.map.line_of_fire(a, b))
+        self.recovery_cover_report = None
+        self._last_recovery_samples = []
+        self._recovery_scan_cursor = 0
         self.slot = hello["slot"]
         self.recover = False
         self.mode = "explore"
@@ -241,16 +246,35 @@ class Bot:
                     return {"take": item["id"], "drop": i}
         return {}
 
-    def position_cost(self, point, threats, center, radius, body_radius, recovering=False, muzzle_height=None):
+    def position_cost(self, point, threats, center, radius, body_radius, recovering=False, muzzle_height=None,
+                      *, me=None, effective_stats=None, deadline=None):
         # Scores are strategy parameters, not claimed probabilities or game constants.
         outside = max(0.0, distance(point, center) + body_radius + 4 - radius)
         score = outside * 9.0
         height = muzzle_height if muzzle_height is not None else self.config["mech"]["muzzle_height"]
         origin = [point[0], point[1], point[2] + height]
+        if recovering:
+            self._last_recovery_samples = []
         for q in threats[:5]:
             actor = q["actor"]
             d = distance(point, actor["pos"])
-            if d < 260 and self.map.line_of_fire(origin, self.actor_center(actor)):
+            if d >= 260:
+                continue
+            if recovering:
+                if me is None:
+                    exposed = True  # Missing body geometry is uncertainty, not protection.
+                    self._last_recovery_samples.append(dict(id=actor['id'], visible=None,
+                                                            rays=0, reasons=['missing_self']))
+                else:
+                    result = self.recovery_exposure.incoming(
+                        me, actor, position=point, effective_stats=effective_stats,
+                        deadline=deadline, max_rays=4, include_width=True)
+                    exposed = result.visible is not False
+                    self._last_recovery_samples.append(dict(id=actor['id'], visible=result.visible,
+                        rays=result.rays, reasons=list(result.reasons)))
+            else:
+                exposed = self.map.line_of_fire(origin, self.actor_center(actor))
+            if exposed:
                 # Re-evaluate exposure at this position, not at the old position.
                 strength = q["risk"] / (1 if q["los"] else .18)
                 score += strength * (55 if recovering else 16)
@@ -294,20 +318,60 @@ class Bot:
                 if distance(point, center) + s["radius"] + 6 < radius and self.map.point_clear(point, s["radius"], s["height"]):
                     retreats.append(point)
             candidates = list(candidates) + retreats
-        # The origin is also a useful candidate when already behind effective cover.
-        candidates = [list(p)] + list(candidates)
+        # Keep checking the origin and last goal, then continue the bounded
+        # recovery scan instead of repeatedly spending the deadline on the
+        # same nearest points. Every exposure result is rechecked at this tick.
+        anchors = [list(p)]
+        scan_offset = 0
+        scan_size = 0
+        if self.recover:
+            if (self.goal is not None and self.goal_kind == self.mode
+                    and distance(self.goal, p) > .01
+                    and self.map.point_clear(self.goal, s['radius'], s['height'])):
+                anchors.append(list(self.goal))
+            candidates = [point for point in candidates
+                          if all(distance(point, anchor) > .01 for anchor in anchors)]
+            scan_size = len(candidates)
+            if scan_size:
+                scan_offset = self._recovery_scan_cursor % scan_size
+                candidates = candidates[scan_offset:] + candidates[:scan_offset]
+        candidates = anchors + list(candidates)
         if not candidates:
             return [*center, self.map.ground_height(*center)]
         best, score = list(p), float("inf")
-        for point in candidates:
+        evaluated, ray_count, origin_report, selected_report = 0, 0, None, None
+        scanned = 0
+        for candidate_index, point in enumerate(candidates):
             if time.perf_counter() > deadline:
                 break
-            cost = self.position_cost(point, threats, center, radius, s["radius"], self.recover, s["muzzle_height"])
+            cost = self.position_cost(point, threats, center, radius, s["radius"], self.recover, s["muzzle_height"],
+                                      me=obs['self'], effective_stats=s, deadline=deadline)
             cost += distance(point, p) * .22
             if not self.recover:
                 cost += distance(point, center) * .07
+            else:
+                report = dict(point=list(point), samples=list(self._last_recovery_samples), cost=cost)
+                evaluated += 1
+                ray_count += sum(sample['rays'] for sample in self._last_recovery_samples)
+                if origin_report is None:
+                    origin_report = report
+                partial = (not any(sample['visible'] is True for sample in self._last_recovery_samples)
+                           and any(sample['visible'] is None and any(reason in ('deadline', 'ray_budget')
+                                   for reason in sample['reasons']) for sample in self._last_recovery_samples))
+                if candidate_index >= len(anchors) and not partial:
+                    scanned += 1
             if cost < score:
                 best, score = point, cost
+                if self.recover:
+                    selected_report = report
+            if self.recover and partial:
+                break  # Start this unresolved candidate with a fresh budget next time.
+        if self.recover:
+            if scan_size:
+                self._recovery_scan_cursor = (scan_offset + scanned) % scan_size
+            self.recovery_cover_report = dict(t=obs['t'], tick=obs['tick'], evaluated=evaluated,
+                rays=ray_count, origin=origin_report, selected=selected_report,
+                scan_start=scan_offset, scanned=scanned, scan_size=scan_size)
         if distance(best, center) + s["radius"] > radius:
             u = unit(best[0] - center[0], best[1] - center[1])
             r = max(0, radius - s["radius"] - 15)
@@ -520,6 +584,7 @@ class Bot:
         me, t = obs["self"], obs["t"]
         self.spacing_boost = False
         self.update(obs)
+        self.recovery_exposure.begin_frame(obs['tick'], ray_budget=64)
         s = self.stats(me)
         threats = self.threats(obs, s)
         visible = [q for q in threats if q["los"] and q["actor"]["kind"] == "mech"]
@@ -528,6 +593,8 @@ class Bot:
             self.recover = True
         if hp >= .93 or (obs["zone"]["radius"] < 18 and visible):
             self.recover = False
+        if not self.recover:
+            self._recovery_scan_cursor = 0
         target = self.choose_target(obs, threats)
         zone = obs["zone"]
         center, future_radius = self.zone_future(obs, 12)
@@ -645,6 +712,8 @@ class Bot:
                           "target": target.get("id") if target else None,
                           "recover": self.recover, "threats": len(visible), "stuck": stuck,
                           "tactical": self.tactical.last_report, "ms": (time.perf_counter() - start) * 1000}
+        if self.recover and self.recovery_cover_report is not None:
+            self.telemetry['recovery_cover'] = self.recovery_cover_report
         return action
 
 
