@@ -228,8 +228,10 @@ class GoalContext:
         if time.perf_counter() >= self.deadline:
             self.budget_exhausted = True
             return UNKNOWN
+        if abs(self.pos[2] - self.arena.ground_height(*self.pos[:2])) > self.arena.step_up + .02:
+            return UNKNOWN
         if math.dist(self.pos[:2], goal[:2]) < 1:
-            return YES
+            return YES if abs(self.pos[2] - goal[2]) <= self.arena.CONTACT_EPS else UNKNOWN
         # This helper describes ground navigation, not rooftop/jet routes.
         if abs(goal[2] - self.arena.ground_height(*goal[:2])) > self.arena.step_up + .02:
             return UNKNOWN
