@@ -44,6 +44,7 @@ class Bot:
         self.damage_bearing = None
         self.last_jump = -100.0
         self.history = deque()
+        self.resource_history = deque()
         self.loot = {}
         self.blacklist = {}
         self.last_move = (0.0, 0.0)
@@ -101,8 +102,12 @@ class Bot:
             if event["type"] in ("took", "take_failed"):
                 self.loot.pop(("pickups", event.get("id")), None)
         self.history.append((t, tuple(me["pos"]), math.hypot(*self.last_move)))
+        # The observed movement belongs to the preceding action's objective.
+        self.resource_history.append((*self.history[-1], self.resource_key))
         while self.history and self.history[0][0] < t - 2.0:
             self.history.popleft()
+        while self.resource_history and self.resource_history[0][0] < t - 2.0:
+            self.resource_history.popleft()
         for category in ("cubes", "pickups", "crates"):
             current = {item["id"] for item in obs.get(category, [])}
             for item in obs.get(category, []):
@@ -502,6 +507,20 @@ class Bot:
                 candidates.append((score, point, "drop", key, drop))
         return max(candidates, default=None, key=lambda c: c[0])
 
+    def resource_progress_failed(self, key):
+        """Require failed movement while continuously pursuing this resource."""
+        samples = []
+        for sample in reversed(self.resource_history):
+            if sample[3] != key:
+                break
+            samples.append(sample)
+        if len(samples) <= 8:
+            return False
+        latest, oldest = samples[0], samples[-1]
+        return (latest[0] - oldest[0] > 1.3
+                and distance(latest[1], oldest[1]) < 1.3
+                and sum(sample[2] for sample in samples) > len(samples) * .6)
+
     def movement(self, obs, navigation, threats, s, urgent, deadline, goal=None):
         if time.perf_counter() >= deadline:
             # Keep a short verified route if optional tactical work has expired.
@@ -616,7 +635,7 @@ class Bot:
         stuck = bool(len(self.history) > 8 and t - self.history[0][0] > 1.3 and distance(p, self.history[0][1]) < 1.3 and sum(h[2] for h in self.history) > len(self.history) * .6)
         jump = False
         if stuck:
-            if resource:
+            if resource and self.resource_progress_failed(resource[3]):
                 self.blacklist[resource[3]] = t + 12
             self.goal_until = -1
             if me["grounded"] and me["energy"] > 40 and t - self.last_jump > 3:
