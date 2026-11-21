@@ -9,6 +9,7 @@ import mechfight as mf
 from arena_map import ArenaMap
 from combat import Combat
 from tactical import TacticalPlanner
+from positioning import CombatPositioning
 
 
 def distance(a, b):
@@ -32,6 +33,7 @@ class Bot:
         self.map = ArenaMap(hello["map"]["dir"], self.config)
         self.combat = Combat(self.config, self.map.line_of_fire)
         self.tactical = TacticalPlanner(self.config, self.map)
+        self.positioning = CombatPositioning(self.config, self.map)
         self.slot = hello["slot"]
         self.recover = False
         self.mode = "explore"
@@ -543,7 +545,18 @@ class Bot:
             self.mode = "recover"
         else:
             self.mode = "engage" if target else "position"
-        if urgent or (self.recover and not resource) or (not target and not resource):
+        continued_goal = None
+        combat_anchor = False
+        if urgent or self.recover or resource or (target and target.get("kind") != "mech"):
+            self.positioning.cancel()
+        elif target is None and self.mode == "position":
+            continued_goal = self.positioning.continuation(obs, s)
+        if continued_goal is not None:
+            # Remember only a movement destination. Combat still receives the
+            # current observed target (None), so memory never invents a shot.
+            goal = continued_goal
+            combat_anchor = True
+        elif urgent or (self.recover and not resource) or (not target and not resource):
             if self.goal is None or t >= self.goal_until or self.goal_kind != self.mode or distance(self.goal, center) > future_radius:
                 self.goal = self.safe_goal(obs, threats, s, deadline - .013)
                 self.goal_until = t + (1.2 if urgent or self.recover else 8)
@@ -598,6 +611,22 @@ class Bot:
                 self.last_strafe = t
             dx, dy = unit(ux * radial - uy * tangent * self.strafe, uy * radial + ux * tangent * self.strafe)
             goal = [p[0] + dx * 20, p[1] + dy * 20, p[2]]
+            if q.get("kind") == "mech" and not urgent and not self.recover:
+                # Reserve time for combat, the route search, and physical
+                # trajectory validation after selecting the destination.
+                anchor = self.positioning.choose(obs, q, goal, preferred, s,
+                                                 deadline=min(deadline - .016, time.perf_counter() + .0028))
+                combat_anchor = anchor is not None
+                if anchor is not None:
+                    goal = anchor
+                else:
+                    # No validated destination: deliberately hold the reported
+                    # position. Do not send the blocked combat point to A*.
+                    goal = list(p)
+                    if me["grounded"] and not self.map.point_clear(goal, s["radius"], s["height"]):
+                        ground = [p[0], p[1], self.map.ground_height(p[0], p[1])]
+                        if self.map.point_clear(ground, s["radius"], s["height"]):
+                            goal = ground
         imminent = any(q["los"] and q["d"] < 28 for q in threats)
         active_contact = target is not None and target.get("kind") == "mech" and t - self.last_weapon_hurt < min(3.0, s["regen_delay"])
         active_contact = active_contact and any(q["actor"]["id"] == target["id"] and q["los"] for q in threats)
@@ -642,6 +671,7 @@ class Bot:
         action.update(self.take_weapon(obs))
         self.last_move = move
         self.telemetry = {"mode": self.mode, "goal": goal, "resource": self.resource_key,
+                          "combat_anchor": combat_anchor,
                           "target": target.get("id") if target else None,
                           "recover": self.recover, "threats": len(visible), "stuck": stuck,
                           "tactical": self.tactical.last_report, "ms": (time.perf_counter() - start) * 1000}
