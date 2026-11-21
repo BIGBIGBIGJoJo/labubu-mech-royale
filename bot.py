@@ -174,7 +174,7 @@ class Bot:
         self.target_id = target["id"]
         return target
 
-    def choose_upgrade(self, obs):
+    def choose_upgrade(self, obs, weapon_action=None):
         offer = obs.get("offer")
         if not offer:
             return None
@@ -193,7 +193,22 @@ class Bot:
         if obs["zone"]["next_radius"] < 30:
             scores["nanites"] -= 30
             scores["plating"] += 12
-        return max(range(len(offer["choices"])), key=lambda i: scores.get(offer["choices"][i]["id"], 25))
+        supported = set(kinds)
+        if weapon_action and "take" in weapon_action:
+            incoming = next((item for item in obs.get("pickups", ())
+                             if item["id"] == weapon_action["take"]), None)
+            if incoming is not None:
+                drop = weapon_action.get("drop")
+                supported = {w["kind"] for i, w in enumerate(me["weapons"])
+                             if w and i != drop}
+                # The protocol does not promise pick/take application order.
+                # Only weapons already held and retained support this choice;
+                # an incoming weapon becomes eligible after acknowledgement.
+        requirements = {u["id"]: u.get("requires") for u in self.config["upgrades"]}
+        eligible = [i for i, choice in enumerate(offer["choices"])
+                    if requirements.get(choice["id"]) is None
+                    or requirements[choice["id"]] in supported]
+        return max(eligible, key=lambda i: scores.get(offer["choices"][i]["id"], 25), default=None)
 
     def weapon_rank(self, obs):
         rank = {"gun": 0, "mortar": 1, "lightning": 2, "laser": 3}
@@ -636,10 +651,11 @@ class Bot:
                 and any(w and w["kind"] == "gun" and w.get("reload", 0) > .3 for w in me["weapons"])):
             combat["aim"] = [self.defensive_yaw(obs, threats), 0]
         action = {"tick": obs["tick"], "move": list(move), "boost": boost, "jump": jump, **combat}
-        upgrade = self.choose_upgrade(obs)
+        weapon_action = self.take_weapon(obs)
+        upgrade = self.choose_upgrade(obs, weapon_action)
         if upgrade is not None:
             action["pick"] = upgrade
-        action.update(self.take_weapon(obs))
+        action.update(weapon_action)
         self.last_move = move
         self.telemetry = {"mode": self.mode, "goal": goal, "resource": self.resource_key,
                           "target": target.get("id") if target else None,

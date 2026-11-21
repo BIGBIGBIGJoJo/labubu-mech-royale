@@ -415,6 +415,8 @@ class StrategyTests(unittest.TestCase):
         upgrades = self.hello["config"]["upgrades"]
         for start in range(0, len(upgrades), 3):
             choices = copy.deepcopy(upgrades[start:start + 3])
+            required = next((u.get("requires") for u in choices if u.get("requires")), None)
+            self.obs["self"]["weapons"][1] = self.weapon(required) if required and required != "gun" else None
             self.obs["offer"] = {"id": start, "expires": 25, "choices": choices}
             self.assertIn(self.bot.choose_upgrade(self.obs), range(len(choices)))
         self.obs["offer"] = {"id": 100, "expires": 25, "choices": [{"id": "future_upgrade"}]}
