@@ -48,9 +48,10 @@ def intercept_time(relative, velocity, speed):
 
 
 class Combat:
-    def __init__(self, config, line_of_fire=None):
+    def __init__(self, config, line_of_fire=None, target_predictor=None):
         self.config = config
         self.line_of_fire = line_of_fire
+        self.target_predictor = target_predictor
         self.sim_dt = 1.0 / max(1.0, float(config.get("match", {}).get("tick_hz", 20)))
         self.action_dt = self.sim_dt * max(1, int(config.get("match", {}).get("decide_every", 2)))
         self._full_since = {}
@@ -149,7 +150,7 @@ class Combat:
         return (abs(angle_delta(solution["aim"][0], actual_next[0])) <= yaw_tolerance
                 and pitch_low <= actual_next[1] <= pitch_high)
 
-    def _direct_solution(self, kind, stats, origin, center, velocity, barrel_offset, limits, target_height):
+    def _direct_solution(self, kind, stats, origin, center, velocity, barrel_offset, limits, target_height, predict_center=None):
         speed = float(stats.get("speed", 252.0))
         # All shots have a small muzzle extension. Re-solve the gun intercept
         # twice after applying it; a translated origin matters at close range.
@@ -162,7 +163,15 @@ class Combat:
                 flight = intercept_time(relative, velocity, speed)
                 if flight is None:
                     return None
-            predicted = [center[i] + velocity[i] * flight for i in range(3)]
+                if predict_center is not None:
+                    # Gravity/landing change target distance. Fixed-point
+                    # refinement is bounded and includes the same launch delay
+                    # as the final aim point, rather than leading it twice.
+                    for _ in range(3):
+                        flight=math.dist(shot_origin,predict_center(flight))/speed
+            predicted = (predict_center(flight) if kind=="gun" and predict_center is not None
+                         else [center[i] + velocity[i] * flight for i in range(3)])
+            center_z = predicted[2]
             if kind != "lightning":
                 # Large cube-scaled mechs can be too tall to aim at another
                 # actor's center at short range while its upper body remains
@@ -185,7 +194,6 @@ class Combat:
         aim[1] = max(limits[0], min(limits[1], aim[1]))
         # Check the muzzle extension as well: a wall can shorten the barrel.
         clear = self._clear(origin, predicted)
-        center_z = center[2] + velocity[2] * flight
         if not clear and kind in ("gun", "laser"):
             # A remembered actor's center may be hidden by a low wall while a
             # meaningful part of its upper or lower body remains hittable.
@@ -301,7 +309,14 @@ class Combat:
                 # Do not perform arc checks for a weapon that cannot shoot.
                 sol = self._mortar_solution(stats, mortar_origin, launch_target, velocity, me, own, limits) if ready[slot] else None
             else:
-                sol = self._direct_solution(kind, stats, origin, launch_target, velocity, own["radius"] + 0.5, limits, height)
+                if kind == "gun" and target.get("kind") == "mech" and self.target_predictor is not None:
+                    def predict_center(flight, delay=fire_delay[slot]):
+                        point = list(self.target_predictor(target, delay + flight))
+                        point[2] += height * .5
+                        return point
+                    sol = self._direct_solution(kind, stats, origin, launch_target, velocity, own["radius"] + 0.5, limits, height, predict_center)
+                else:
+                    sol = self._direct_solution(kind, stats, origin, launch_target, velocity, own["radius"] + 0.5, limits, height)
             if sol:
                 solutions[slot] = sol
 

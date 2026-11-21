@@ -9,6 +9,7 @@ import mechfight as mf
 from arena_map import ArenaMap
 from combat import Combat
 from tactical import TacticalPlanner
+from target_motion import TargetMotion
 
 
 def distance(a, b):
@@ -30,7 +31,8 @@ class Bot:
     def __init__(self, hello):
         self.config = hello["config"]
         self.map = ArenaMap(hello["map"]["dir"], self.config)
-        self.combat = Combat(self.config, self.map.line_of_fire)
+        self.target_motion = TargetMotion(self.config, self.map)
+        self.combat = Combat(self.config, self.map.line_of_fire, self.target_motion.forecast)
         self.tactical = TacticalPlanner(self.config, self.map)
         self.slot = hello["slot"]
         self.recover = False
@@ -83,6 +85,7 @@ class Bot:
 
     def update(self, obs):
         t, me = obs["t"], obs["self"]
+        self.target_motion.update(obs)
         if t >= self.visit_t + 1:
             cell = (int(me["pos"][0] // 35), int(me["pos"][1] // 35))
             self.visited[cell] = self.visited.get(cell, 0) + 1
