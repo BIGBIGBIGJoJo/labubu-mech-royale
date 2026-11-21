@@ -45,6 +45,7 @@ class Bot:
         self.last_jump = -100.0
         self.history = deque()
         self.resource_history = deque()
+        self.resource_progress_veto = None
         self.loot = {}
         self.blacklist = {}
         self.last_move = (0.0, 0.0)
@@ -102,6 +103,8 @@ class Bot:
             if event["type"] in ("took", "take_failed"):
                 self.loot.pop(("pickups", event.get("id")), None)
         self.history.append((t, tuple(me["pos"]), math.hypot(*self.last_move)))
+        if self.resource_progress_veto and self.resource_progress_veto[0] != self.resource_key:
+            self.resource_progress_veto = None
         # The observed movement belongs to the preceding action's objective.
         self.resource_history.append((*self.history[-1], self.resource_key))
         while self.history and self.history[0][0] < t - 2.0:
@@ -507,7 +510,7 @@ class Bot:
                 candidates.append((score, point, "drop", key, drop))
         return max(candidates, default=None, key=lambda c: c[0])
 
-    def resource_progress_failed(self, key):
+    def resource_progress_failed(self, key, goal=None):
         """Require failed movement while continuously pursuing this resource."""
         samples = []
         for sample in reversed(self.resource_history):
@@ -517,9 +520,26 @@ class Bot:
         if len(samples) <= 8:
             return False
         latest, oldest = samples[0], samples[-1]
-        return (latest[0] - oldest[0] > 1.3
-                and distance(latest[1], oldest[1]) < 1.3
-                and sum(sample[2] for sample in samples) > len(samples) * .6)
+        failed = (latest[0] - oldest[0] > 1.3
+                  and distance(latest[1], oldest[1]) < 1.3
+                  and sum(sample[2] for sample in samples) > len(samples) * .6)
+        if not failed or goal is None:
+            return failed
+        # A return from an inertial overshoot can resemble a two-second stall.
+        # Require observed approach, not requested movement or velocity alone.
+        recent = next((sample for sample in samples if latest[0] - sample[0] >= .4 - 1e-8), None)
+        if recent is None or distance(recent[1], goal) - distance(latest[1], goal) <= 1.3:
+            return True
+        veto = self.resource_progress_veto
+        if veto and veto[0] == key:
+            if latest[0] <= veto[2]:
+                return False
+            # Renew only with new net approach; an out-and-back cycle cannot
+            # repeatedly earn grace by revisiting the same position.
+            if distance(veto[1], goal) - distance(latest[1], goal) <= 1.3:
+                return True
+        self.resource_progress_veto = (key, latest[1], latest[0] + .4)
+        return False
 
     def movement(self, obs, navigation, threats, s, urgent, deadline, goal=None):
         if time.perf_counter() >= deadline:
@@ -635,7 +655,7 @@ class Bot:
         stuck = bool(len(self.history) > 8 and t - self.history[0][0] > 1.3 and distance(p, self.history[0][1]) < 1.3 and sum(h[2] for h in self.history) > len(self.history) * .6)
         jump = False
         if stuck:
-            if resource and self.resource_progress_failed(resource[3]):
+            if resource and self.resource_progress_failed(resource[3], resource[1]):
                 self.blacklist[resource[3]] = t + 12
             self.goal_until = -1
             if me["grounded"] and me["energy"] > 40 and t - self.last_jump > 3:
