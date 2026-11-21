@@ -58,10 +58,27 @@ class CombatTests(unittest.TestCase):
         action = combat.Combat(CONFIG).plan(observation(weapon("gun")), enemy())
         self.assertTrue(action["fire"][0])
 
+    def test_large_mech_can_aim_at_close_opponents_upper_body(self):
+        controller = combat.Combat(CONFIG)
+        obs = observation(weapon("gun"))
+        obs["self"]["cubes"] = 10
+        obs["self"]["stats"].update(radius=3.75, height=13.5, muzzle_height=10.5)
+        obs["self"]["aim"] = [0, -0.7]
+        action = controller.plan(obs, enemy(6.5))
+        self.assertGreaterEqual(action["aim"][1], -0.7)
+        self.assertTrue(action["fire"][0])
+
     def test_wall_blocks_remembered_target(self):
         action = combat.Combat(CONFIG, lambda a, b: False).plan(
             observation(weapon("gun"), weapon("laser")), enemy())
         self.assertEqual(action["fire"], [False, False])
+
+    def test_upper_body_can_be_targeted_over_low_cover(self):
+        controller = combat.Combat(CONFIG, lambda a, b: b[2] >= 8.0)
+        obs = observation(weapon("gun"))
+        action = controller.plan(obs, enemy())
+        self.assertGreater(action["aim"][1], 0.0)
+        self.assertTrue(action["fire"][0])
 
     def test_recovery_releases_laser_and_reloads_gun(self):
         obs = observation(weapon("gun", ammo=6), weapon("laser", charge=0.5))

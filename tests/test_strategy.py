@@ -42,7 +42,7 @@ class FlatArena:
     def point_clear(self, point, radius, height):
         return True
 
-    def cover_candidates(self, pos, center, radius, body_radius, height, limit=22):
+    def cover_candidates(self, pos, center, radius, body_radius, height, limit=22, deadline=None):
         return [[center[0], center[1], 0], [pos[0] + 30, pos[1], 0], [pos[0], pos[1] + 30, 0]]
 
     def navigate(self, pos, goal, radius, height, deadline=None):
@@ -143,6 +143,59 @@ class StrategyTests(unittest.TestCase):
         self.assertNotEqual(self.bot.mode, "loot")
         self.assertEqual(action["fire"], [False, False])
 
+    def test_crate_farming_goal_keeps_aimable_standoff(self):
+        for crate_distance in (1, 5, 14, 35):
+            with self.subTest(crate_distance=crate_distance):
+                self.bot.loot.clear()
+                self.obs["crates"] = [{"id": 1001, "pos": [crate_distance, 0, 0], "hp": 300}]
+                self.bot.act(self.obs)
+                self.assertEqual(self.bot.mode, "loot")
+                goal = self.bot.telemetry["goal"]
+                separation = math.dist(goal[:2], self.obs["crates"][0]["pos"][:2])
+                self.assertGreaterEqual(separation, 12.0)
+
+    def test_destroyed_nearby_crate_is_pruned_and_its_cube_pursued(self):
+        self.obs["crates"] = [{"id": 1001, "pos": [20, 0, 0], "hp": 300}]
+        self.bot.act(self.obs)
+        self.assertIn(("crates", 1001), self.bot.loot)
+        self.obs.update(t=20.1, tick=402)
+        self.obs["crates"] = []
+        self.obs["cubes"] = [{"id": 5001, "pos": [20, 0, 0]}]
+        action = self.bot.act(self.obs)
+        self.assertNotIn(("crates", 1001), self.bot.loot)
+        self.assertIn(("cubes", 5001), self.bot.loot)
+        self.assertEqual(self.bot.mode, "loot")
+        self.assertEqual(self.bot.telemetry["goal"], [20, 0, 0])
+        self.assertGreater(action["move"][0], 0.5)
+        self.assertEqual(action["fire"], [False, False])
+
+    def test_missing_cube_behind_wall_stays_in_memory(self):
+        self.obs["cubes"] = [{"id": 5001, "pos": [5, 0, 0]}]
+        self.bot.update(self.obs)
+        self.obs.update(t=20.1, tick=402)
+        self.obs["cubes"] = []
+        with patch.object(self.bot.map, "line_of_fire", return_value=False):
+            self.bot.update(self.obs)
+        self.assertIn(("cubes", 5001), self.bot.loot,
+                      "A nearby object behind solid cover may still exist")
+
+    def test_missing_cube_in_clear_near_sensors_is_pruned(self):
+        self.obs["cubes"] = [{"id": 5001, "pos": [30, 0, 0]}]
+        self.bot.update(self.obs)
+        self.obs.update(t=20.1, tick=402)
+        self.obs["cubes"] = []
+        self.bot.update(self.obs)
+        self.assertNotIn(("cubes", 5001), self.bot.loot)
+
+    def test_missing_loot_beyond_near_sensor_range_stays_in_memory(self):
+        self.obs["cubes"] = [{"id": 5001, "pos": [60, 0, 0]}]
+        self.bot.update(self.obs)
+        self.obs.update(t=20.1, tick=402)
+        self.obs["cubes"] = []
+        self.bot.update(self.obs)
+        self.assertIn(("cubes", 5001), self.bot.loot,
+                      "Distant loot can leave the field of view without disappearing")
+
     def test_safe_cube_is_pursued_but_enemy_contested_cube_is_not(self):
         self.obs["cubes"] = [{"id": 5001, "pos": [15, 0, 0]}]
         self.bot.update(self.obs)
@@ -151,6 +204,23 @@ class StrategyTests(unittest.TestCase):
         enemy = self.enemy(20)
         threat = {"actor": enemy, "d": 20, "los": True, "risk": 2}
         self.assertIsNone(self.bot.resource_goal(self.obs, [threat]))
+
+    def test_safe_cube_detour_wins_movement_over_a_distant_target(self):
+        self.obs["cubes"] = [{"id": 5001, "pos": [0, 15, 0]}]
+        self.obs["mechs"] = [self.enemy(150)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.mode, "loot")
+        self.assertEqual(self.bot.telemetry["goal"], [0, 15, 0])
+        self.assertGreater(action["move"][1], 0.5)
+        self.assertTrue(action["fire"][0],
+                        "Safe resource movement can coexist with a valid distant shot")
+
+    def test_close_enemy_blocks_resource_detour(self):
+        self.obs["cubes"] = [{"id": 5001, "pos": [0, 15, 0]}]
+        self.obs["mechs"] = [self.enemy(50)]
+        self.bot.act(self.obs)
+        self.assertEqual(self.bot.mode, "engage")
+        self.assertNotEqual(self.bot.telemetry["goal"], [0, 15, 0])
 
     def test_pickup_requires_vertical_and_horizontal_reach(self):
         self.obs["pickups"] = [{"id": 8001, "kind": "laser", "pos": [1, 0, 5]}]

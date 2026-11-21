@@ -93,11 +93,14 @@ class Combat:
     def _aligned(self, actual_next, solution, radius, height, projectile_radius=0.0):
         distance = max(0.01, solution["horizontal"])
         yaw_tolerance = math.atan2(radius * 0.80 + projectile_radius, distance)
-        pitch_tolerance = math.atan2(height * 0.40 + projectile_radius, distance)
+        half_height = height * 0.40 + projectile_radius
+        center_z = solution.get("center_z", solution["point"][2])
+        pitch_low = math.atan2(center_z - half_height - solution["origin"][2], distance)
+        pitch_high = math.atan2(center_z + half_height - solution["origin"][2], distance)
         return (abs(angle_delta(solution["aim"][0], actual_next[0])) <= yaw_tolerance
-                and abs(solution["aim"][1] - actual_next[1]) <= pitch_tolerance)
+                and pitch_low <= actual_next[1] <= pitch_high)
 
-    def _direct_solution(self, kind, stats, origin, center, velocity, barrel_offset, limits):
+    def _direct_solution(self, kind, stats, origin, center, velocity, barrel_offset, limits, target_height):
         speed = float(stats.get("speed", 252.0))
         # All shots have a small muzzle extension. Re-solve the gun intercept
         # twice after applying it; a translated origin matters at close range.
@@ -111,20 +114,48 @@ class Combat:
                 if flight is None:
                     return None
             predicted = [center[i] + velocity[i] * flight for i in range(3)]
+            if kind != "lightning":
+                # Large cube-scaled mechs can be too tall to aim at another
+                # actor's center at short range while its upper body remains
+                # hittable. Intersect the pitch envelope with the body interior.
+                horizontal = math.dist(shot_origin[:2], predicted[:2])
+                low = max(predicted[2] - target_height * 0.40,
+                          shot_origin[2] + math.tan(limits[0]) * horizontal)
+                high = min(predicted[2] + target_height * 0.40,
+                           shot_origin[2] + math.tan(limits[1]) * horizontal)
+                if low > high + 1e-8:
+                    return None
+                predicted[2] = max(low, min(high, predicted[2]))
             aim = point_aim(shot_origin, predicted)
             vec = direction(aim)
             shot_origin = [origin[i] + barrel_offset * vec[i] for i in range(3)]
         aim = point_aim(shot_origin, predicted)
         distance = math.dist(shot_origin, predicted)
-        if distance > stats.get("range", 230.0) or (kind != "lightning" and not limits[0] <= aim[1] <= limits[1]):
+        if distance > stats.get("range", 230.0) or (kind != "lightning" and not limits[0] - 1e-7 <= aim[1] <= limits[1] + 1e-7):
             return None
-        if kind == "lightning":
-            aim[1] = max(limits[0], min(limits[1], aim[1]))
+        aim[1] = max(limits[0], min(limits[1], aim[1]))
         # Check the muzzle extension as well: a wall can shorten the barrel.
         clear = self._clear(origin, predicted)
+        center_z = center[2] + velocity[2] * flight
+        if not clear and kind in ("gun", "laser"):
+            # A remembered actor's center may be hidden by a low wall while a
+            # meaningful part of its upper or lower body remains hittable.
+            for height_fraction in (0.39, -0.39):
+                alternate = [predicted[0], predicted[1], center_z + target_height * height_fraction]
+                alternate_aim = point_aim(origin, alternate)
+                if not limits[0] <= alternate_aim[1] <= limits[1] or not self._clear(origin, alternate):
+                    continue
+                vec = direction(alternate_aim)
+                alternate_origin = [origin[i] + barrel_offset * vec[i] for i in range(3)]
+                alternate_distance = math.dist(alternate_origin, alternate)
+                if alternate_distance > stats.get("range", 230.0):
+                    continue
+                predicted, shot_origin, aim = alternate, alternate_origin, alternate_aim
+                distance, clear = alternate_distance, True
+                break
         return {"aim": aim, "point": predicted, "origin": shot_origin,
                 "horizontal": math.dist(shot_origin[:2], predicted[:2]),
-                "distance": distance, "clear": clear, "flight": flight}
+                "distance": distance, "clear": clear, "flight": flight, "center_z": center_z}
 
     def _mortar_solution(self, stats, origin, center, velocity, me, self_stats, limits):
         speed = float(stats.get("speed", 72.0))
@@ -210,7 +241,7 @@ class Combat:
                 # Do not perform arc checks for a weapon that cannot shoot.
                 sol = self._mortar_solution(stats, mortar_origin, center, velocity, me, own, limits) if ready[slot] else None
             else:
-                sol = self._direct_solution(kind, stats, origin, center, velocity, own["radius"] + 0.5, limits)
+                sol = self._direct_solution(kind, stats, origin, center, velocity, own["radius"] + 0.5, limits, height)
             if sol:
                 solutions[slot] = sol
 

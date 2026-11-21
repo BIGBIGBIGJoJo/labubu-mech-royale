@@ -90,7 +90,12 @@ class Bot:
             for key, (item, seen) in list(self.loot.items()):
                 if key[0] != category:
                     continue
-                if t - seen > 45 or (distance(item["pos"], me["pos"]) < 8 and item["id"] not in current):
+                absent_near = False
+                near_range = self.config["vision"]["near_range"] + me.get("stats", {}).get("near_range_bonus", 0)
+                if item["id"] not in current and distance(item["pos"], me["pos"]) < near_range:
+                    eye_h = me.get("stats", {}).get("eye_height", self.config["mech"]["eye_height"])
+                    absent_near = self.map.line_of_fire([me["pos"][0], me["pos"][1], me["pos"][2] + eye_h], [item["pos"][0], item["pos"][1], item["pos"][2] + .8])
+                if t - seen > 45 or absent_near:
                     self.loot.pop(key, None)
         self.blacklist = {k: until for k, until in self.blacklist.items() if until > t}
 
@@ -109,7 +114,11 @@ class Bot:
             d = distance(actor["pos"], p)
             if actor.get("kind") == "npc" and d > self.config["npc"]["aggro_range"] + 15:
                 continue
-            visible = self.map.line_of_fire(eye, self.actor_center(actor))
+            center = self.actor_center(actor)
+            visible = self.map.line_of_fire(eye, center)
+            if not visible:
+                upper = [center[0], center[1], actor["pos"][2] + (center[2] - actor["pos"][2]) * 1.8]
+                visible = self.map.line_of_fire(eye, upper)
             weapons = actor.get("weapons", ["gun"])
             threat = (1.0 if actor.get("kind") == "mech" else .16) * (1 + .04 * actor.get("cubes", 0))
             threat *= 1.0 if visible else .18
@@ -211,7 +220,7 @@ class Bot:
                 options.append((score, point))
             if options:
                 return min(options, key=lambda item: item[0])[1]
-        candidates = self.map.cover_candidates(p, center, radius, s["radius"], s["height"], limit=22)
+        candidates = self.map.cover_candidates(p, center, radius, s["radius"], s["height"], limit=22, deadline=deadline)
         # The origin is also a useful candidate when already behind effective cover.
         candidates = [list(p)] + list(candidates)
         if not candidates:
@@ -353,16 +362,15 @@ class Bot:
         center, future_radius = self.zone_future(obs, 12)
         p = me["pos"]
         urgent = not me["in_zone"] or distance(p, center) + s["radius"] + 8 > future_radius
-        resource = None
+        resource = self.resource_goal(obs, threats) if not urgent and not self.recover else None
         if urgent:
             self.mode = "rotate"
         elif self.recover:
             self.mode = "recover"
-        elif target:
-            self.mode = "engage"
+        elif resource:
+            self.mode = "loot"
         else:
-            resource = self.resource_goal(obs, threats)
-            self.mode = "loot" if resource else "position"
+            self.mode = "engage" if target else "position"
         if urgent or self.recover or (not target and not resource):
             if self.goal is None or t >= self.goal_until or self.goal_kind != self.mode or distance(self.goal, center) > future_radius:
                 self.goal = self.safe_goal(obs, threats, s, deadline - .013)
@@ -374,6 +382,16 @@ class Bot:
             self.goal, self.goal_kind = goal, "loot"
             if resource[2] == "crates" and distance(p, goal) < 65:
                 target = {**resource[4], "kind": "crate", "vel": [0, 0, 0]}
+                # The muzzle cannot pitch down enough to hit a crate at our feet.
+                d = distance(p, goal)
+                ux, uy = unit(p[0] - goal[0], p[1] - goal[1])
+                if d < .01:
+                    ux, uy = -math.cos(me["aim"][0]), -math.sin(me["aim"][0])
+                standoff = max(14.0, (s["muzzle_height"] - self.config["crates"].get("height", 2.4) * .5) / max(.1, -math.tan(s["min_pitch"])) + 4)
+                if standoff - 2 <= d <= standoff + 3:
+                    goal = list(p)
+                else:
+                    goal = [goal[0] + ux * standoff, goal[1] + uy * standoff, p[2]]
             if resource[2] == "drop" and distance(p, goal) < resource[4]["radius"] - s["radius"] * .3:
                 goal = list(p)
         else:

@@ -339,10 +339,12 @@ class ArenaMap:
             self._walk_cache[key]=value
         return value
 
-    def _nearest_free(self, cell, dims):
+    def _nearest_free(self, cell, dims, deadline=None):
         if self._free(cell,dims):
             return cell
         for rad in range(1,9):
+            if deadline is not None and time.perf_counter()>=deadline:
+                return None
             ring=[]
             for d in range(-rad,rad+1):
                 ring.extend(((cell[0]+d,cell[1]-rad),(cell[0]+d,cell[1]+rad)))
@@ -350,6 +352,8 @@ class ArenaMap:
                 ring.extend(((cell[0]-rad,cell[1]+d),(cell[0]+rad,cell[1]+d)))
             ring.sort(key=lambda c:(c[0]-cell[0])**2+(c[1]-cell[1])**2)
             for candidate in ring:
+                if deadline is not None and time.perf_counter()>=deadline:
+                    return None
                 if self._free(candidate,dims):
                     return candidate
         return None
@@ -359,12 +363,24 @@ class ArenaMap:
         dx,dy=abs(a[0]-b[0]),abs(a[1]-b[1])
         return max(dx,dy)+0.41421356237*min(dx,dy)
 
-    def _local_steer(self,pos,goal,radius,height):
+    def _traversable(self,cell,nxt,dims):
+        # Terrain traversal is directional: a steep drop can be legal even
+        # when climbing the same edge is impossible.
+        edge_key=(dims,cell,nxt)
+        result=self._edge_cache.get(edge_key)
+        if result is None:
+            result=self.move_clear(self._point(cell),self._point(nxt),*dims)
+            self._edge_cache[edge_key]=result
+        return result
+
+    def _local_steer(self,pos,goal,radius,height,deadline=None):
         dx,dy=_direction(pos,goal)
         if not dx and not dy:
             return (0.0,0.0)
         angle=math.atan2(dy,dx)
         for turn in (0,0.45,-0.45,0.85,-0.85,1.25,-1.25,1.7,-1.7,2.3,-2.3,math.pi):
+            if deadline is not None and time.perf_counter()>=deadline:
+                break
             vx,vy=math.cos(angle+turn),math.sin(angle+turn)
             if self.move_clear(pos,(pos[0]+vx*5,pos[1]+vy*5,pos[2]),radius,height):
                 return (vx,vy)
@@ -374,10 +390,12 @@ class ArenaMap:
         """Ground route steering, with bounded incremental A* and local avoidance."""
         if not self.available:
             return _direction(pos,goal)
-        if math.hypot(goal[0]-pos[0],goal[1]-pos[1])<1.0:
-            return (0.0,0.0)
         if deadline is None:
             deadline=time.perf_counter()+0.008
+        if time.perf_counter()>=deadline:
+            return (0.0,0.0)
+        if math.hypot(goal[0]-pos[0],goal[1]-pos[1])<1.0:
+            return (0.0,0.0)
         if math.hypot(goal[0]-pos[0],goal[1]-pos[1]) < 40 and self.move_clear(pos,goal,radius,height):
             return _direction(pos,goal)
         # Round clearance upward so caches never understate a growing mech.
@@ -386,10 +404,10 @@ class ArenaMap:
             self._walk_cache.clear()
             self._edge_cache.clear()
             self._active_dims=dims
-        target=self._nearest_free(self._cell(goal),dims)
-        start=self._nearest_free(self._cell(pos),dims)
+        target=self._nearest_free(self._cell(goal),dims,deadline)
+        start=self._nearest_free(self._cell(pos),dims,deadline)
         if target is None or start is None:
-            return self._local_steer(pos,goal,radius,height)
+            return self._local_steer(pos,goal,radius,height,deadline)
         key=(target,dims)
         search=self._search
         if search is None or search["key"] != key or self._heuristic(start,search["start"])>7:
@@ -398,8 +416,10 @@ class ArenaMap:
             self._search=search
             self._path=[]
         expanded=0
+        # Keep time for validating a steering segment after the graph search.
+        search_deadline=deadline-0.0025
         while search["heap"] and not search["done"] and expanded<600:
-            if time.perf_counter()>=deadline:
+            if time.perf_counter()>=search_deadline:
                 break
             _,cost,cell=heapq.heappop(search["heap"])
             if cell in search["closed"]:
@@ -420,14 +440,7 @@ class ArenaMap:
                     continue
                 # Segment checking prevents cutting across thin walls or slopes
                 # between otherwise valid grid-cell centers.
-                # Terrain traversal is directional: a steep drop can be legal
-                # even when climbing the same edge is impossible.
-                edge_key=(dims,cell,nxt)
-                edge_clear=self._edge_cache.get(edge_key)
-                if edge_clear is None:
-                    edge_clear=self.move_clear(self._point(cell),self._point(nxt),*dims)
-                    self._edge_cache[edge_key]=edge_clear
-                if not edge_clear:
+                if not self._traversable(cell,nxt,dims):
                     continue
                 new=cost+(1.41421356237 if dx and dy else 1)
                 if new < search["g"].get(nxt,float("inf")):
@@ -443,14 +456,18 @@ class ArenaMap:
         self._path=path
         # Skip passed points; seek the farthest short, unobstructed waypoint.
         nearest=min(range(len(path)),key=lambda i:(path[i][0]-pos[0])**2+(path[i][1]-pos[1])**2)
-        for i in range(min(len(path)-1,nearest+4),nearest,-1):
+        for i in range(min(len(path)-1,nearest+3),nearest,-1):
+            if time.perf_counter()>=deadline:
+                break
             if self.move_clear(pos,path[i],radius,height):
                 return _direction(pos,path[i])
-        if search["done"] and self.move_clear(pos,goal,radius,height):
+        if (search["done"] and time.perf_counter()<deadline
+                and math.hypot(pos[0]-goal[0],pos[1]-goal[1])<40
+                and self.move_clear(pos,goal,radius,height)):
             return _direction(pos,goal)
-        return self._local_steer(pos,goal,radius,height)
+        return self._local_steer(pos,goal,radius,height,deadline)
 
-    def cover_candidates(self,pos,zone_center,zone_radius,radius=2.5,height=9.0,limit=16):
+    def cover_candidates(self,pos,zone_center,zone_radius,radius=2.5,height=9.0,limit=16,deadline=None):
         """Nearby wall-corner/edge positions inside the supplied safe circle.
 
         These are geometry candidates, not guaranteed protection from a particular
@@ -458,10 +475,20 @@ class ArenaMap:
         """
         if not self.available or limit<=0:
             return []
+        if deadline is None:
+            deadline=time.perf_counter()+0.007
+        if time.perf_counter()>=deadline:
+            return []
         reach=min(150.0,max(40.0,zone_radius))
         candidates=[]
         seen=set()
-        for index in self._candidates(pos[0]-reach,pos[1]-reach,pos[0]+reach,pos[1]+reach):
+        indices=self._candidates(pos[0]-reach,pos[1]-reach,pos[0]+reach,pos[1]+reach)
+        def box_distance(index):
+            x0,y0,x1,y1=self.prisms[index]["box"]
+            return max(x0-pos[0],0,pos[0]-x1)**2+max(y0-pos[1],0,pos[1]-y1)**2
+        for index in sorted(indices,key=box_distance)[:12]:
+            if time.perf_counter()>=deadline-0.0015:
+                break
             prism=self.prisms[index]
             for ax,ay,bx,by in prism["edges"]:
                 dx,dy=bx-ax,by-ay
@@ -485,6 +512,8 @@ class ArenaMap:
         candidates.sort(key=lambda item:item[0])
         selected=[]
         for _,(x,y),top in candidates[:400]:
+            if time.perf_counter()>=deadline:
+                break
             z=self.ground_height(x,y)
             if top>=z+height*0.6 and self.point_clear((x,y,z),radius,height):
                 selected.append((x,y,z))
