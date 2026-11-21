@@ -312,6 +312,12 @@ class TacticalPlanner:
                               "geometry_checked":0,"projectiles":0,"fallback":True}
             return (0.0,0.0),False
         me=obs["self"]
+        # Rotation follows a validated route. Price routed progress against the
+        # time spent in the damaging zone, rather than allowing a soft incoming
+        # exposure estimate to keep backing away indefinitely. Actual shots,
+        # charging beams, zone damage and collision checks keep full weight.
+        route_weight=1.3+(max(3.0,obs["zone"]["dps"]/max(stats["walk_speed"],1)) if urgent else 0)
+        exposure_weight=(1.0 if recover else .65)*(.35 if urgent else 1.0)
         nav=unit(*navigation)
         angle=math.atan2(nav[1],nav[0])
         directions=[nav,self.last_direction,(0.0,0.0)]
@@ -339,7 +345,7 @@ class TacticalPlanner:
                 path=self.rollout(me,direction,boost,stats)
                 end=path[-1]
                 progress=(end[1]-me["pos"][0])*nav[0]+(end[2]-me["pos"][1])*nav[1]
-                cost=-1.3*progress
+                cost=-route_weight*progress
                 if nav==(0.0,0.0):
                     cost+=math.hypot(end[1]-me["pos"][0],end[2]-me["pos"][1])*1.5
                 if goal is not None and math.hypot(goal[0]-me["pos"][0],goal[1]-me["pos"][1])<12:
@@ -351,7 +357,7 @@ class TacticalPlanner:
                 bullet=self.projectile_cost(path,tracks,stats)
                 cost+=bullet+self._zone_cost(path,obs,stats)+self._beam_cost(path,pressure,stats)
                 exposure=self._exposure(path,pressure,stats,False,deadline)
-                cost+=exposure*(1.0 if recover else .65)
+                cost+=exposure*exposure_weight
                 ranked.append((cost,direction,boost,path,bullet,exposure))
             if time.perf_counter()>=cheap_deadline:
                 break
@@ -367,12 +373,12 @@ class TacticalPlanner:
             corrected=self._geometry(path,stats,deadline,direction,boost,charging)
             if corrected is None:
                 continue
-            adjusted=cost-bullet-exposure*(1.0 if recover else .65)
+            adjusted=cost-bullet-exposure*exposure_weight
             adjusted+=self.projectile_cost(corrected,tracks,stats)
-            adjusted+=self._exposure(corrected,pressure[:2],stats,True,deadline)*(1.0 if recover else .65)
+            adjusted+=self._exposure(corrected,pressure[:2],stats,True,deadline)*exposure_weight
             # Third threat is retained conservatively without extra ray queries.
             if len(pressure)>2:
-                adjusted+=self._exposure(corrected,pressure[2:],stats,False,deadline)*(1.0 if recover else .65)
+                adjusted+=self._exposure(corrected,pressure[2:],stats,False,deadline)*exposure_weight
             if best is None or adjusted<best[0]:
                 best=(adjusted,direction,boost)
             if checked>=3 and not tracks and not any(q["actor"].get("charging") for q in pressure):

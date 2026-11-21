@@ -12,9 +12,10 @@ Verified on November 21, 2026. Official score means mean `16 - place` over
 | BB-80D20692 | 7c38fba27c3feb6f52c2b74b45423f63beb33ff5 | 4.19 | Accepted; previous best |
 | BB-12F2E201 | 39b6d509af8e82b0ceb9e1c430dd964674d7488e | **4.75** | Accepted; current best and automatically selected entry |
 | BB-81C2BC51 | 373f70986d2ffe9077d7afc1a8c773097b4f4ede | 4.63 | Accepted; lower than the selected best |
+| BB-1B3ACBAA | 88488f29e2b56ea82b33930793a6506c91efc21a | 2.46 | Accepted; selective policy underperformed in coordinated practice |
 
 The strategy-v2 candidate improved 4.19 to 4.75 (approximately 13.4%).
-Five submissions have been accepted. The hourly quota replenishes over time;
+Six submissions have been accepted. The hourly quota replenishes over time;
 check the authenticated panel before any further attempt.
 
 The automatically selected entry is the commit above; this is **not** a claim
@@ -67,6 +68,48 @@ There were no elective FINISH selections: observed early opponents exceeded the
 short finish budget, and later safety/recovery conditions vetoed entry. Thus this
 run supports the farming/defense/recovery behavior, not a measured benefit from
 third-party finishing. It is one uncontrolled private match, not the official score.
+
+A second unchanged private run finished **2nd, 0 kills, 4 cubes**, with no policy
+errors or decisions over 50 ms (maximum 33.11 ms). Its first mech trigger followed
+an attributed attack at 127.2 seconds. It took 852 zone damage during the late
+rotation, which warrants a movement investigation. Neither private run selected
+FINISH. The official result was **2.46**: the private outcomes did not establish
+competitive practice strength. The 4.75 entry remains selected, and the 6.0
+objective has not been reached.
+
+## Selective follow-up: urgent routes and reload readiness
+
+This candidate isolates two measured faults while retaining the original
+three-second defensive attribution and all opening/finish permission rules.
+
+The late-rotation replay showed 260.3 m traveled for only 15.5 m net displacement,
+mostly with ready routes and clear local geometry. Urgent-only route weighting
+reduced backward projected progress from 63 to 4 of 201 captured observations;
+mean 0.6-second routed progress rose from 1.66 to 7.40 m. Mean immediate
+projectile cost rose from 3.14 to 4.45 as a documented tradeoff. Collision,
+projectile, beam, and actual-zone costs remain active; nonurgent behavior is
+unchanged. This is a decision replay, not a simulated match outcome.
+
+The reload change suppresses optional partial-magazine reloads while a visible
+opponent is within threatening reach. Empty guns still reload. Three partial
+reloads in the second private trace overlapped 2.7 observed seconds of renewed
+defensive permission. A frozen-observation check found 1.0 second with valid gun
+triggers if the available rounds had been retained; it does not establish hits.
+
+- 262 tests pass, including four captured-rotation regressions and seven reload
+  regressions across the weapon and orchestration layers.
+- Restricted Docker: 300/300 on time, no dropped older replies, wrong ticks or
+  invalid lines; p99 15.9 ms, maximum 17.6 ms, ready in 1,473 ms.
+- Host stress: 540 valid decisions, maximum 42.71 ms, none over 50 ms. One dense
+  combat case exceeded 40 ms; the remaining scenario maxima were below 33 ms.
+
+The unchanged follow-up candidate finished **2nd, 0 kills, 3 cubes** in a private
+diagnostic at 165.4 seconds. It took zero zone damage, had zero policy errors,
+and all 1,653 issued actions computed within 50 ms (maximum 32.59 ms). The trace
+logged 131 authorized mech-trigger commands and no permission violations. Its
+first mech trigger followed attributed damage at 89.2 seconds. No FINISH was
+selected. This was a different random match, so the absence of zone damage does
+not establish a controlled before/after survival gain.
 
 ## Earlier strategy-v2 and v3 checks
 

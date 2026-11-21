@@ -746,8 +746,21 @@ class Bot:
         self.target_id = target.get("id") if target else None
         protected_ids = {a["id"] for a in obs.get("mechs", []) if a.get("kind") == "mech"
                          and (target is None or a["id"] != target.get("id") or not allow_fire)}
+        quiet_reload = True
+        for q in threats:
+            if not q["los"]:
+                continue
+            actor = q["actor"]
+            if actor.get("kind") == "npc":
+                reach = self.config["npc"]["aggro_range"] + 15
+            else:
+                reach = max((self.config["weapons"].get(kind, {}).get("range", 250)
+                             for kind in actor.get("weapons", ["gun"])), default=230) + 20
+            if q["d"] <= reach:
+                quiet_reload = False
+                break
         combat = self.combat.plan(obs, target, allow_fire=allow_fire, emergency=urgent or self.recover,
-                                  protected_ids=protected_ids)
+                                  protected_ids=protected_ids, quiet_reload=quiet_reload)
         navigation = self.map.navigate(p, goal, s["radius"], s["height"], deadline=deadline - .012)
         self.check_route_progress(obs, goal, navigation, bool(visible))
         if distance(p, goal) < 1.5:
@@ -805,6 +818,7 @@ class Bot:
                           "target": target.get("id") if target else None,
                           "target_hp": target.get("hp") if target else None,
                           "allow_fire": allow_fire, "fire_reason": fire_reason,
+                          "quiet_reload": quiet_reload,
                           "engagement": {"mode": decision.mode, "confidence": decision.confidence,
                                          "evidence_age": decision.evidence_age, "finish_eta": decision.finish_eta,
                                          "budget_s": decision.finish_budget_s, "exclusions": decision.exclusions},

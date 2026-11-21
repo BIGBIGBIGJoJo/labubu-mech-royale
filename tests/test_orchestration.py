@@ -67,6 +67,49 @@ class OrchestrationTests(unittest.TestCase):
         self.assert_no_enemy_fire(action)
         self.assertLessEqual(self.bot.telemetry["goal"][0], 1e-8)
 
+    def test_quiet_nearby_mech_does_not_trigger_partial_reload(self):
+        self.obs["self"]["weapons"][0]["ammo"] = 9
+        self.obs["mechs"] = [self.enemy(100)]
+        action = self.act_with_safety()
+        self.assert_no_enemy_fire(action)
+        self.assertFalse(action["reload"],
+                         "Withholding first fire must preserve loaded defensive rounds")
+
+    def test_quiet_without_enemy_tops_up_partial_magazine(self):
+        self.obs["self"]["weapons"][0]["ammo"] = 9
+        action = self.act_with_safety()
+        self.assert_no_enemy_fire(action)
+        self.assertTrue(action["reload"])
+
+    def test_quiet_occluded_enemy_allows_partial_reload(self):
+        self.obs["self"]["weapons"][0]["ammo"] = 9
+        self.obs["mechs"] = [self.enemy(100)]
+        with patch.object(self.bot.map, "line_of_fire", return_value=False):
+            action = self.act_with_safety()
+        self.assert_no_enemy_fire(action)
+        self.assertTrue(action["reload"], "Observed cover permits a quiet top-up")
+
+    def test_empty_magazine_reloads_even_near_quiet_enemy(self):
+        self.obs["self"]["weapons"][0]["ammo"] = 0
+        self.obs["mechs"] = [self.enemy(100)]
+        action = self.act_with_safety()
+        self.assert_no_enemy_fire(action)
+        self.assertTrue(action["reload"], "An empty gun needs reloading despite exposure")
+
+    def test_renewed_defense_uses_rounds_preserved_during_quiet_frame(self):
+        self.obs["self"]["weapons"][0]["ammo"] = 9
+        self.obs["mechs"] = [self.enemy(100)]
+        quiet_action = self.act_with_safety()
+        self.assert_no_enemy_fire(quiet_action)
+        self.assertFalse(quiet_action["reload"])
+        self.obs.update(t=self.obs["t"] + .1, tick=self.obs["tick"] + 2)
+        self.attacked(5)
+        action = self.act_with_safety()
+        self.assertEqual(self.bot.state, "DEFEND")
+        self.assertEqual(self.bot.telemetry["target"], 5)
+        self.assertTrue(action["fire"][0])
+        self.assertFalse(action["reload"])
+
     def test_withdrawn_permission_releases_laser_without_retargeting_quiet_mech(self):
         # Releasing a held laser emits a beam; false triggers alone are not a
         # no-shot guarantee. Idle scanning must preserve the observed barrel.

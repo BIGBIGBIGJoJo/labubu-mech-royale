@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import time
 import unittest
+from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -128,6 +129,60 @@ class TacticalTests(unittest.TestCase):
     def test_current_occlusion_does_not_reduce_intrinsic_strength(self):
         actor={'id':3,'kind':'mech','pos':[50,0,0],'weapons':['gun'],'cubes':0}
         self.assertGreater(self.planner._strength(actor,50),self.planner._strength(actor,150))
+
+    def recorded_rotation(self, timestamp, urgent):
+        # These are sanitized observed states from the final private rotation,
+        # not a synthetic match. Open ground isolates tactical scoring; the
+        # same route segments were separately checked against the real map.
+        cases=json.loads((ROOT/'tests/rotation_observations.json').read_text(encoding='utf-8'))
+        case=next(case for case in cases if case['obs']['t']==timestamp)
+        obs=case['obs']
+        stats={**self.config['mech'],**obs['self']['stats']}
+        scale=1+self.config['cubes']['size_per_cube']*obs['self']['cubes']
+        stats['radius']*=scale
+        stats['height']*=scale
+        planner=TacticalPlanner(self.config,FlatMap())
+        planner.last_direction=case['last_direction']
+        # Test the bounded candidate set independent of scheduler jitter.
+        with patch('tactical.time.perf_counter',return_value=0):
+            direction,boost=planner.choose(obs,case['navigation'],case['threats'],stats,
+                                           recover=case['recover'],urgent=urgent,deadline=1)
+        path=planner.rollout(obs['self'],direction,boost,stats)
+        progress=sum((path[-1][i+1]-obs['self']['pos'][i])*case['navigation'][i] for i in range(2))
+        return planner,case,stats,path,progress
+
+    def test_urgent_rotation_does_not_retreat_from_soft_pressure(self):
+        _,_,_,_,ordinary=self.recorded_rotation(147,False)
+        _,_,_,_,urgent=self.recorded_rotation(147,True)
+        # Preserve the ordinary recovery retreat, but make routed progress
+        # during an urgent rotation instead of backing southeast indefinitely.
+        self.assertLess(ordinary,-5)
+        self.assertGreater(urgent,3)
+
+    def test_urgent_progress_keeps_incoming_projectile_avoidance(self):
+        planner,case,stats,path,progress=self.recorded_rotation(151,True)
+        tracks=planner._projectiles(case['obs'],time.perf_counter()+1)
+        direct=planner.rollout(case['obs']['self'],case['navigation'],True,stats)
+        self.assertGreater(planner.projectile_cost(direct,tracks,stats),0)
+        self.assertEqual(planner.projectile_cost(path,tracks,stats),0)
+        self.assertGreater(progress,5)
+
+    def test_imminent_zone_entry_prefers_turning_back_to_route(self):
+        _,_,_,_,ordinary=self.recorded_rotation(160.5,False)
+        planner,case,stats,path,urgent=self.recorded_rotation(160.5,True)
+        self.assertLess(ordinary,-6)
+        # Existing southbound momentum cannot instantly reverse, but the
+        # returned intention turns north and makes positive horizon progress.
+        self.assertGreater(urgent,.5)
+        self.assertLess(planner._zone_cost(path,case['obs'],stats),69)
+
+    def test_urgent_rotation_still_checks_swept_body_collision(self):
+        planner=TacticalPlanner(self.config,WallMap())
+        self.obs['zone']['dps']=160
+        with patch('tactical.time.perf_counter',return_value=0):
+            direction,boost=planner.choose(self.obs,(1,0),[],self.stats,urgent=True,deadline=1)
+        path=planner.rollout(self.me,direction,boost,self.stats)
+        self.assertLessEqual(max(point[1] for point in path)+self.stats['radius'],5.5+1e-6)
 
 
 if __name__=='__main__':

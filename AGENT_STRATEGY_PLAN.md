@@ -4,6 +4,11 @@
 
 Aim for an official practice score of **6.0**. The best measured entry is currently **4.75**; this plan has not yet established an improvement.
 
+The first implementation scored **2.46** in coordinated practice. See
+[the follow-up plan](SELECTIVE_V2_PLAN.md) for the measured rotation failure and
+the next bounded investigations. Private first/second places did not establish
+an official improvement.
+
 The user confirmed all three constraints:
 
 - Avoid initiating fights with enemy mechs. There is no fixed opening timer that later permits arbitrary attacks.

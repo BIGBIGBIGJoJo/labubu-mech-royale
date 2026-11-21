@@ -474,7 +474,7 @@ class Combat:
             return True
         return True
 
-    def plan(self, obs, target, allow_fire=True, emergency=False, protected_ids=None):
+    def plan(self, obs, target, allow_fire=True, emergency=False, protected_ids=None, quiet_reload=True):
         me = obs["self"]
         weapons = list(me.get("weapons", [None, None]))[:2]
         weapons += [None] * (2 - len(weapons))
@@ -488,7 +488,7 @@ class Combat:
             if weapon and weapon["kind"] == "gun" and not weapon.get("reload", 0):
                 stats = self._stats(weapon)
                 ammo = weapon.get("ammo", stats.get("mag", 12))
-                if ammo <= 0 or ((target is None or not allow_fire) and ammo < stats.get("mag", 12)):
+                if ammo <= 0 or (quiet_reload and (target is None or not allow_fire) and ammo < stats.get("mag", 12)):
                     action["reload"] = True
         if target is None or not allow_fire:
             self._full_since.clear()

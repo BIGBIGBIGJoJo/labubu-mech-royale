@@ -494,6 +494,18 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(action["fire"], [False, False])
         self.assertTrue(action["reload"])
 
+    def test_partial_magazine_can_be_retained_while_watching_a_threat(self):
+        for target, allow_fire in ((None, True), (enemy(), False)):
+            with self.subTest(target=target):
+                obs = observation(weapon("gun", ammo=10))
+                action = combat.Combat(CONFIG).plan(obs, target, allow_fire=allow_fire, quiet_reload=False)
+                self.assertFalse(action["reload"])
+                self.assertEqual(action["fire"], [False, False])
+
+    def test_empty_gun_reloads_even_when_quiet_reload_is_suppressed(self):
+        obs = observation(weapon("gun", ammo=0))
+        self.assertTrue(combat.Combat(CONFIG).plan(obs, None, quiet_reload=False)["reload"])
+
     def test_optional_protected_mech_blocks_gun_interception(self):
         target = enemy(100)
         quiet = {**enemy(50), "id": 6}
