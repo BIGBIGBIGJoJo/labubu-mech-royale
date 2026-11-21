@@ -201,8 +201,8 @@ class Bot:
             rank["lightning"] = 4
         return rank
 
-    def defensive_yaw(self, obs, threats):
-        """Keep several attackers in the front armor arc during a long reload."""
+    def defensive_yaw(self, obs, threats, *, recent_damage_yaw=None):
+        """Face visible attackers; keep selected damage aim without LOS inputs."""
         p, actual = obs["self"]["pos"], obs["self"]["aim"][0]
         incoming = []
         for q in threats:
@@ -213,7 +213,7 @@ class Bot:
             weight = q["risk"] * (2 if obs["t"] - self.recent_attackers.get(actor["id"], -100) < 3 else 1)
             incoming.append((bearing, weight))
         if not incoming:
-            return actual
+            return actual if recent_damage_yaw is None else recent_damage_yaw
         delta = lambda a, b: (a - b + math.pi) % math.tau - math.pi
         candidates = [actual] + [a for a, _ in incoming]
         for i, (a, _) in enumerate(incoming):
@@ -621,10 +621,12 @@ class Bot:
             self.goal_until = -1
             if me["grounded"] and me["energy"] > 40 and t - self.last_jump > 3:
                 jump, self.last_jump = True, t
+        recent_damage_yaw = None
         if target is None or not allow_fire:
             # Turn toward received fire, otherwise scan instead of staring at the destination.
             if t - self.last_hurt < 3 and self.damage_bearing is not None:
                 combat["aim"] = [self.damage_bearing, me["aim"][1]]
+                recent_damage_yaw = self.damage_bearing
             elif threats:
                 enemy = max(threats, key=lambda q: q["risk"])["actor"]
                 combat["aim"] = [math.atan2(enemy["pos"][1] - p[1], enemy["pos"][0] - p[0]), 0]
@@ -634,7 +636,7 @@ class Bot:
         if (self.recover and not any(combat["fire"])
                 and not any(w and w.get("charge", 0) > 0 for w in me["weapons"])
                 and any(w and w["kind"] == "gun" and w.get("reload", 0) > .3 for w in me["weapons"])):
-            combat["aim"] = [self.defensive_yaw(obs, threats), 0]
+            combat["aim"] = [self.defensive_yaw(obs, threats, recent_damage_yaw=recent_damage_yaw), 0]
         action = {"tick": obs["tick"], "move": list(move), "boost": boost, "jump": jump, **combat}
         upgrade = self.choose_upgrade(obs)
         if upgrade is not None:

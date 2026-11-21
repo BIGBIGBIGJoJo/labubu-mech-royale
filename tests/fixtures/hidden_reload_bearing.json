@@ -1,0 +1,4789 @@
+{
+  "source_commit": "f978f47f2919addc790a8751715f96a6d4d614f3",
+  "trace_sha256": "0b7a2dfa444da95ef826bcabce094eec2ce62405b02db90faff9fa3796f5f9a1",
+  "hello": {
+    "type": "hello",
+    "protocol": "mechfight/1",
+    "slot": 0,
+    "seed": 2849494080,
+    "map": {
+      "dir": "/opt/mechplay/releases/rooms128-together/app/viewer/public/arena",
+      "files": [
+        "v2/world.json",
+        "v2/terrain.i16"
+      ]
+    },
+    "config": {
+      "match": {
+        "tick_hz": 20,
+        "decide_every": 2,
+        "duration_s": 240,
+        "mechs": 16,
+        "spawn_min_separation": 130,
+        "spawn_zone_fraction": 0.8,
+        "arena_margin": 30
+      },
+      "bot": {
+        "tick_budget_ms": 50,
+        "hello_budget_ms": 20000,
+        "coast_s": 1,
+        "offer_timeout_s": 5,
+        "max_line_bytes": 65536
+      },
+      "mech": {
+        "radius": 2.5,
+        "height": 9,
+        "eye_height": 8,
+        "muzzle_height": 7,
+        "hp": 1400,
+        "walk_speed": 11.7,
+        "boost_speed": 19.5,
+        "ground_accel": 58.5,
+        "air_accel": 12,
+        "gravity": 22,
+        "jump_speed": 11,
+        "jet_accel": 34,
+        "max_rise_speed": 10,
+        "step_up": 1.2,
+        "max_slope_deg": 50,
+        "energy": 100,
+        "energy_regen": 18,
+        "energy_regen_delay": 0.6,
+        "boost_drain": 17,
+        "jet_drain": 15,
+        "turn_rate": 4,
+        "pitch_rate": 3,
+        "min_pitch": -0.7,
+        "max_pitch": 1.3,
+        "regen_delay": 5,
+        "regen_per_s": 45,
+        "charge_move_mult": 0.5,
+        "self_damage_mult": 0.5,
+        "armor": 0,
+        "rear_mult": 1.5,
+        "front_arc_deg": 180,
+        "near_range_bonus": 0,
+        "vision_bonus": 0,
+        "hearing": 1
+      },
+      "vision": {
+        "range": 200,
+        "fov_deg": 120,
+        "near_range": 45,
+        "canopy_blocks": true,
+        "show_enemy_hp": true,
+        "memory_s": 5
+      },
+      "sound": {
+        "bearing_noise_deg": 7,
+        "near": 60,
+        "mid": 160,
+        "step_speed": 5,
+        "step_every": 0.6,
+        "range": {
+          "step": 40,
+          "boost": 90,
+          "reload": 60,
+          "gun": 320,
+          "mortar": 420,
+          "explosion": 420,
+          "laser_charge": 140,
+          "laser": 380,
+          "lightning": 160,
+          "jet": 90,
+          "death": 600,
+          "crate": 220,
+          "npc_gun": 200,
+          "drop": 600
+        }
+      },
+      "weapons": {
+        "gun": {
+          "damage": 45,
+          "cooldown": 0.24,
+          "speed": 252,
+          "range": 230,
+          "spread_deg": 0.6,
+          "mag": 12,
+          "reload": 2.4
+        },
+        "mortar": {
+          "damage": 200,
+          "splash": 160,
+          "splash_radius": 7,
+          "splash_edge": 0.3,
+          "cooldown": 2.6,
+          "speed": 72,
+          "gravity": 22,
+          "ttl": 7,
+          "knock": 16,
+          "knock_up": 9,
+          "drain": 45
+        },
+        "laser": {
+          "damage": 315,
+          "charge": 0.75,
+          "min_charge": 0.15,
+          "min_frac": 0.35,
+          "hold_s": 2,
+          "cooldown": 1.65,
+          "range": 280,
+          "pierce": 0,
+          "charge_turn_mult": 1,
+          "cookoff": 0.6
+        },
+        "lightning": {
+          "damage": 60,
+          "cooldown": 0.25,
+          "range": 45,
+          "cone_deg": 30,
+          "chain": 2,
+          "chain_range": 14,
+          "chain_falloff": 0.7,
+          "energy": 3,
+          "short_s": 2
+        }
+      },
+      "projectile": {
+        "gun_radius": 0.3,
+        "npc_radius": 0.3
+      },
+      "cubes": {
+        "pickup_radius": 3.5,
+        "hp_per_cube": 0.04,
+        "damage_per_cube": 0.04,
+        "stat_cap": 10,
+        "death_drop_extra": 2,
+        "size_per_cube": 0.05,
+        "upgrade_thresholds": [
+          1,
+          3,
+          6,
+          10,
+          15,
+          21,
+          28,
+          36,
+          45
+        ]
+      },
+      "crates": {
+        "count": 36,
+        "roof_fraction": 0.25,
+        "hp": 300,
+        "radius": 1.4,
+        "height": 2.4,
+        "cubes": 1
+      },
+      "loot": {
+        "pickup_radius": 4,
+        "equip_s": 1,
+        "floor_count": 40,
+        "floor_roof_fraction": 0.25,
+        "crate_weapon_chance": 0.5,
+        "death_drop": 1,
+        "weights": {
+          "gun": 0,
+          "mortar": 1,
+          "laser": 1,
+          "lightning": 1
+        }
+      },
+      "npc": {
+        "count": 12,
+        "hp": 350,
+        "radius": 1.8,
+        "height": 3.5,
+        "speed": 5,
+        "leash": 30,
+        "chase_leash": 60,
+        "aggro_range": 45,
+        "deaggro_range": 90,
+        "spawn_clear": 90,
+        "damage": 25,
+        "cooldown": 1,
+        "projectile_speed": 90,
+        "spread_deg": 2.5,
+        "cubes": 2
+      },
+      "drops": {
+        "times": [
+          35,
+          70,
+          105
+        ],
+        "fall_s": 12.5,
+        "radius": 8,
+        "capture_s": 4,
+        "cubes": 3,
+        "repair": 1,
+        "spread": 0.7
+      },
+      "zone": {
+        "start_center": [
+          41.3,
+          -72.8
+        ],
+        "start_radius": 560,
+        "phases": [
+          {
+            "hold_s": 30,
+            "shrink_s": 25,
+            "radius": 380,
+            "dps": 20
+          },
+          {
+            "hold_s": 22.5,
+            "shrink_s": 20,
+            "radius": 240,
+            "dps": 35
+          },
+          {
+            "hold_s": 17.5,
+            "shrink_s": 17.5,
+            "radius": 140,
+            "dps": 60
+          },
+          {
+            "hold_s": 15,
+            "shrink_s": 15,
+            "radius": 70,
+            "dps": 100
+          },
+          {
+            "hold_s": 12.5,
+            "shrink_s": 12.5,
+            "radius": 25,
+            "dps": 160
+          },
+          {
+            "hold_s": 7.5,
+            "shrink_s": 12.5,
+            "radius": 0,
+            "dps": 260
+          }
+        ]
+      },
+      "debug": {
+        "max_lines": 64,
+        "max_points": 64,
+        "max_text": 16,
+        "max_text_chars": 80,
+        "max_bytes": 8192,
+        "max_match_bytes": 8000000,
+        "hold_s": 0.5
+      },
+      "replay": {
+        "frame_every": 2
+      },
+      "upgrades": [
+        {
+          "id": "plating",
+          "name": "Composite plating",
+          "desc": "+15% max HP",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.hp",
+              "mul": 1.15
+            }
+          ]
+        },
+        {
+          "id": "armor",
+          "name": "Reactive armor",
+          "desc": "-8% damage taken",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.armor",
+              "add": 0.08
+            }
+          ]
+        },
+        {
+          "id": "servos",
+          "name": "Leg servos",
+          "desc": "+8% walk and boost speed",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.walk_speed",
+              "mul": 1.08
+            },
+            {
+              "path": "mech.boost_speed",
+              "mul": 1.08
+            }
+          ]
+        },
+        {
+          "id": "capacitor",
+          "name": "Capacitor bank",
+          "desc": "+30 max energy",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.energy",
+              "add": 30
+            }
+          ]
+        },
+        {
+          "id": "reactor",
+          "name": "Reactor tune",
+          "desc": "+30% energy regen",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.energy_regen",
+              "mul": 1.3
+            }
+          ]
+        },
+        {
+          "id": "jets",
+          "name": "Efficient jets",
+          "desc": "-25% boost and jet energy drain",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.boost_drain",
+              "mul": 0.75
+            },
+            {
+              "path": "mech.jet_drain",
+              "mul": 0.75
+            }
+          ]
+        },
+        {
+          "id": "nanites",
+          "name": "Repair nanites",
+          "desc": "+60% out-of-combat regen, starts 1.5 s sooner",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.regen_per_s",
+              "mul": 1.6
+            },
+            {
+              "path": "mech.regen_delay",
+              "add": -1.5
+            }
+          ]
+        },
+        {
+          "id": "gyros",
+          "name": "Torso gyros",
+          "desc": "+30% aim turn rate",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.turn_rate",
+              "mul": 1.3
+            },
+            {
+              "path": "mech.pitch_rate",
+              "mul": 1.3
+            }
+          ]
+        },
+        {
+          "id": "sensors",
+          "name": "Sensor suite",
+          "desc": "+15 m proximity sensors, +25 m vision, halves sound bearing error",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.near_range_bonus",
+              "add": 15
+            },
+            {
+              "path": "mech.vision_bonus",
+              "add": 25
+            },
+            {
+              "path": "mech.hearing",
+              "mul": 0.5
+            }
+          ]
+        },
+        {
+          "id": "gun_damage",
+          "name": "Tungsten rounds",
+          "desc": "+15% arm gun damage",
+          "requires": "gun",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.gun.damage",
+              "mul": 1.15
+            }
+          ]
+        },
+        {
+          "id": "gun_rate",
+          "name": "Rotary feed",
+          "desc": "+15% arm gun fire rate",
+          "requires": "gun",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.gun.cooldown",
+              "mul": 0.87
+            }
+          ]
+        },
+        {
+          "id": "gun_velocity",
+          "name": "Rail barrel",
+          "desc": "+25% arm gun projectile speed",
+          "requires": "gun",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.gun.speed",
+              "mul": 1.25
+            },
+            {
+              "path": "weapons.gun.range",
+              "mul": 1.15
+            }
+          ]
+        },
+        {
+          "id": "gun_mag",
+          "name": "Drum magazine",
+          "desc": "+8 rounds, -20% reload time",
+          "requires": "gun",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.gun.mag",
+              "add": 8
+            },
+            {
+              "path": "weapons.gun.reload",
+              "mul": 0.8
+            }
+          ]
+        },
+        {
+          "id": "mortar_splash",
+          "name": "Cluster shells",
+          "desc": "+30% mortar splash radius",
+          "requires": "mortar",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.mortar.splash_radius",
+              "mul": 1.3
+            }
+          ]
+        },
+        {
+          "id": "mortar_reload",
+          "name": "Autoloader",
+          "desc": "-18% mortar cooldown",
+          "requires": "mortar",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.mortar.cooldown",
+              "mul": 0.82
+            }
+          ]
+        },
+        {
+          "id": "mortar_velocity",
+          "name": "Long tube",
+          "desc": "+20% shell speed",
+          "requires": "mortar",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.mortar.speed",
+              "mul": 1.2
+            }
+          ]
+        },
+        {
+          "id": "laser_charge",
+          "name": "Fast capacitors",
+          "desc": "-25% laser charge time",
+          "requires": "laser",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.laser.charge",
+              "mul": 0.75
+            }
+          ]
+        },
+        {
+          "id": "laser_damage",
+          "name": "Focusing lens",
+          "desc": "+18% laser damage",
+          "requires": "laser",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.laser.damage",
+              "mul": 1.18
+            }
+          ]
+        },
+        {
+          "id": "laser_pierce",
+          "name": "Phased beam",
+          "desc": "Laser passes through one more target",
+          "requires": "laser",
+          "max": 1,
+          "effects": [
+            {
+              "path": "weapons.laser.pierce",
+              "add": 1
+            }
+          ]
+        },
+        {
+          "id": "lightning_chain",
+          "name": "Arc relay",
+          "desc": "+1 lightning chain jump",
+          "requires": "lightning",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.lightning.chain",
+              "add": 1
+            }
+          ]
+        },
+        {
+          "id": "lightning_range",
+          "name": "Tesla coil",
+          "desc": "+20% lightning range and cone",
+          "requires": "lightning",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.lightning.range",
+              "mul": 1.2
+            },
+            {
+              "path": "weapons.lightning.cone_deg",
+              "mul": 1.2
+            }
+          ]
+        },
+        {
+          "id": "lightning_efficiency",
+          "name": "Superconductor",
+          "desc": "-35% lightning energy cost, +10% damage",
+          "requires": "lightning",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.lightning.energy",
+              "mul": 0.65
+            },
+            {
+              "path": "weapons.lightning.damage",
+              "mul": 1.1
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "initial_last_hurt": 54.2,
+  "initial_damage_bearing": -0.203,
+  "frames": [
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1086,
+        "t": 54.3,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            168.38,
+            -84.15,
+            5.09
+          ],
+          "vel": [
+            -8.68,
+            1.32,
+            0
+          ],
+          "aim": [
+            2.142,
+            -0.152
+          ],
+          "hp": 1143.25,
+          "max_hp": 2125.2,
+          "energy": 100,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0.09,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 2.35
+            },
+            {
+              "kind": "laser",
+              "cooldown": 1.6,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [
+          {
+            "id": 630,
+            "kind": "gun",
+            "pos": [
+              186.54,
+              -86.59,
+              12.67
+            ],
+            "vel": [
+              -248.86,
+              24.54,
+              -31.15
+            ]
+          }
+        ],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8045,
+            "kind": "laser",
+            "pos": [
+              158.63,
+              -37.25,
+              5.77
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [
+          {
+            "kind": "gun",
+            "bearing": -0.023,
+            "dist": "near",
+            "age": 0.1
+          }
+        ],
+        "beams": [],
+        "events": [
+          {
+            "type": "hit",
+            "target": 1010,
+            "amount": 59.4,
+            "weapon": "gun"
+          }
+        ],
+        "zone": {
+          "center": [
+            155.45,
+            -86.4
+          ],
+          "radius": 385.04,
+          "next_center": [
+            158.74,
+            -86.79
+          ],
+          "next_radius": 380,
+          "shrink_start": 30,
+          "shrink_end": 55,
+          "dps": 20
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.203,
+      "recorded_action": {
+        "tick": 1086,
+        "move": [
+          0.0,
+          0.0
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          2.142,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1088,
+        "t": 54.4,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            167.22,
+            -83.97,
+            5.07
+          ],
+          "vel": [
+            -11.57,
+            1.76,
+            0
+          ],
+          "aim": [
+            1.742,
+            -0.154
+          ],
+          "hp": 1051.45,
+          "max_hp": 2125.2,
+          "energy": 100,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 2.25
+            },
+            {
+              "kind": "laser",
+              "cooldown": 1.5,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8045,
+            "kind": "laser",
+            "pos": [
+              158.63,
+              -37.25,
+              5.77
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [],
+        "beams": [],
+        "events": [
+          {
+            "type": "damaged",
+            "amount": 91.8,
+            "weapon": "gun",
+            "bearing": -0.2,
+            "by": 6,
+            "rear": true
+          }
+        ],
+        "zone": {
+          "center": [
+            155.92,
+            -86.46
+          ],
+          "radius": 384.32,
+          "next_center": [
+            158.74,
+            -86.79
+          ],
+          "next_radius": 380,
+          "shrink_start": 30,
+          "shrink_end": 55,
+          "dps": 20
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.2,
+      "recorded_action": {
+        "tick": 1088,
+        "move": [
+          0.9883108444578063,
+          -0.15245220473019716
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          1.742,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1090,
+        "t": 54.5,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            166.07,
+            -83.8,
+            5.06
+          ],
+          "vel": [
+            -11.57,
+            1.76,
+            0
+          ],
+          "aim": [
+            1.342,
+            -0.155
+          ],
+          "hp": 1051.45,
+          "max_hp": 2125.2,
+          "energy": 100,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 2.15
+            },
+            {
+              "kind": "laser",
+              "cooldown": 1.4,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [
+          {
+            "id": 631,
+            "kind": "gun",
+            "pos": [
+              187.75,
+              -85.5,
+              12.83
+            ],
+            "vel": [
+              -243.82,
+              46.17,
+              -43.89
+            ]
+          }
+        ],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [
+          {
+            "kind": "gun",
+            "bearing": 0.057,
+            "dist": "near",
+            "age": 0.1
+          },
+          {
+            "kind": "gun",
+            "bearing": 2.921,
+            "dist": "far",
+            "age": 0.1
+          }
+        ],
+        "beams": [],
+        "events": [],
+        "zone": {
+          "center": [
+            156.39,
+            -86.51
+          ],
+          "radius": 383.6,
+          "next_center": [
+            158.74,
+            -86.79
+          ],
+          "next_radius": 380,
+          "shrink_start": 30,
+          "shrink_end": 55,
+          "dps": 20
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.2,
+      "recorded_action": {
+        "tick": 1090,
+        "move": [
+          0.9886715262132021,
+          -0.150095347213888
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          1.342,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1092,
+        "t": 54.6,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            165.34,
+            -83.69,
+            5.06
+          ],
+          "vel": [
+            -5.78,
+            0.88,
+            0
+          ],
+          "aim": [
+            0.942,
+            -0.156
+          ],
+          "hp": 990.25,
+          "max_hp": 2125.2,
+          "energy": 100,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 2.05
+            },
+            {
+              "kind": "laser",
+              "cooldown": 1.3,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [
+          {
+            "kind": "gun",
+            "bearing": -2.828,
+            "dist": "far",
+            "age": 0.1
+          }
+        ],
+        "beams": [],
+        "events": [
+          {
+            "type": "damaged",
+            "amount": 61.2,
+            "weapon": "gun",
+            "bearing": 0.049,
+            "by": 6
+          }
+        ],
+        "zone": {
+          "center": [
+            156.86,
+            -86.57
+          ],
+          "radius": 382.88,
+          "next_center": [
+            158.74,
+            -86.79
+          ],
+          "next_radius": 380,
+          "shrink_start": 30,
+          "shrink_end": 55,
+          "dps": 20
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": 0.049,
+      "recorded_action": {
+        "tick": 1092,
+        "move": [
+          0.9887036989520775,
+          -0.1498832735113545
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          0.942,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1094,
+        "t": 54.7,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            165.2,
+            -83.66,
+            5.06
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            1.342,
+            0
+          ],
+          "hp": 990.25,
+          "max_hp": 2125.2,
+          "energy": 100,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 1.95
+            },
+            {
+              "kind": "laser",
+              "cooldown": 1.2,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [
+          {
+            "id": 634,
+            "kind": "gun",
+            "pos": [
+              201.09,
+              -89.44,
+              16.71
+            ],
+            "vel": [
+              -244.89,
+              55.58,
+              -21.1
+            ]
+          }
+        ],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [
+          {
+            "kind": "gun",
+            "bearing": -0.313,
+            "dist": "near",
+            "age": 0.05
+          },
+          {
+            "kind": "gun",
+            "bearing": 2.769,
+            "dist": "far",
+            "age": 0.05
+          }
+        ],
+        "beams": [],
+        "events": [],
+        "zone": {
+          "center": [
+            157.33,
+            -86.63
+          ],
+          "radius": 382.16,
+          "next_center": [
+            158.74,
+            -86.79
+          ],
+          "next_radius": 380,
+          "shrink_start": 30,
+          "shrink_end": 55,
+          "dps": 20
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": 0.049,
+      "recorded_action": {
+        "tick": 1094,
+        "move": [
+          0.9883716976506169,
+          -0.152057184253943
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          1.342,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1096,
+        "t": 54.8,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            165.63,
+            -83.73,
+            5.06
+          ],
+          "vel": [
+            5.78,
+            -0.89,
+            0
+          ],
+          "aim": [
+            1.742,
+            0
+          ],
+          "hp": 990.25,
+          "max_hp": 2125.2,
+          "energy": 100,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 1.85
+            },
+            {
+              "kind": "laser",
+              "cooldown": 1.1,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [
+          {
+            "id": 634,
+            "kind": "gun",
+            "pos": [
+              176.6,
+              -83.88,
+              14.6
+            ],
+            "vel": [
+              -244.89,
+              55.58,
+              -21.1
+            ]
+          }
+        ],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [],
+        "beams": [],
+        "events": [],
+        "zone": {
+          "center": [
+            157.8,
+            -86.68
+          ],
+          "radius": 381.44,
+          "next_center": [
+            158.74,
+            -86.79
+          ],
+          "next_radius": 380,
+          "shrink_start": 30,
+          "shrink_end": 55,
+          "dps": 20
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": 0.049,
+      "recorded_action": {
+        "tick": 1096,
+        "move": [
+          0.9885357889597676,
+          -0.15098673433679485
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          1.742,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1098,
+        "t": 54.9,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            166.65,
+            -83.88,
+            5.07
+          ],
+          "vel": [
+            11.57,
+            -1.76,
+            0
+          ],
+          "aim": [
+            1.342,
+            0
+          ],
+          "hp": 929.05,
+          "max_hp": 2125.2,
+          "energy": 100,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 1.75
+            },
+            {
+              "kind": "laser",
+              "cooldown": 1,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [],
+        "beams": [],
+        "events": [
+          {
+            "type": "damaged",
+            "amount": 61.2,
+            "weapon": "gun",
+            "bearing": -0.008,
+            "by": 6
+          }
+        ],
+        "zone": {
+          "center": [
+            158.27,
+            -86.74
+          ],
+          "radius": 380.72,
+          "next_center": [
+            158.74,
+            -86.79
+          ],
+          "next_radius": 380,
+          "shrink_start": 30,
+          "shrink_end": 55,
+          "dps": 20
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.008,
+      "recorded_action": {
+        "tick": 1098,
+        "move": [
+          0.9881844382256071,
+          -0.15326942307173141
+        ],
+        "boost": true,
+        "jump": false,
+        "aim": [
+          1.342,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1100,
+        "t": 55,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            167.8,
+            -84.06,
+            5.08
+          ],
+          "vel": [
+            11.57,
+            -1.75,
+            0
+          ],
+          "aim": [
+            0.942,
+            0
+          ],
+          "hp": 929.05,
+          "max_hp": 2125.2,
+          "energy": 100,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 1.65
+            },
+            {
+              "kind": "laser",
+              "cooldown": 0.9,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [
+          {
+            "id": 636,
+            "kind": "gun",
+            "pos": [
+              190.04,
+              -90.12,
+              13.53
+            ],
+            "vel": [
+              -244.86,
+              48.84,
+              -34.13
+            ]
+          }
+        ],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8045,
+            "kind": "laser",
+            "pos": [
+              158.63,
+              -37.25,
+              5.77
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [
+          {
+            "kind": "gun",
+            "bearing": -0.387,
+            "dist": "near",
+            "age": 0.1
+          },
+          {
+            "kind": "gun",
+            "bearing": 2.913,
+            "dist": "far",
+            "age": 0.1
+          }
+        ],
+        "beams": [],
+        "events": [],
+        "zone": {
+          "center": [
+            158.74,
+            -86.79
+          ],
+          "radius": 380,
+          "next_center": [
+            138.63,
+            -218.21
+          ],
+          "next_radius": 240,
+          "shrink_start": 77.5,
+          "shrink_end": 97.5,
+          "dps": 35
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.008,
+      "recorded_action": {
+        "tick": 1100,
+        "move": [
+          0.0,
+          0.0
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          0.942,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1102,
+        "t": 55.1,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            168.96,
+            -84.24,
+            5.09
+          ],
+          "vel": [
+            11.56,
+            -1.78,
+            0
+          ],
+          "aim": [
+            1.342,
+            0
+          ],
+          "hp": 837.25,
+          "max_hp": 2125.2,
+          "energy": 100,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 1.55
+            },
+            {
+              "kind": "laser",
+              "cooldown": 0.8,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [],
+        "beams": [],
+        "events": [
+          {
+            "type": "damaged",
+            "amount": 91.8,
+            "weapon": "gun",
+            "bearing": -0.371,
+            "by": 6,
+            "rear": true
+          }
+        ],
+        "zone": {
+          "center": [
+            158.74,
+            -86.79
+          ],
+          "radius": 380,
+          "next_center": [
+            138.63,
+            -218.21
+          ],
+          "next_radius": 240,
+          "shrink_start": 77.5,
+          "shrink_end": 97.5,
+          "dps": 35
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.371,
+      "recorded_action": {
+        "tick": 1102,
+        "move": [
+          0.0,
+          0.0
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          1.342,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1104,
+        "t": 55.2,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            170.12,
+            -84.41,
+            5.09
+          ],
+          "vel": [
+            11.57,
+            -1.77,
+            0
+          ],
+          "aim": [
+            1.742,
+            0
+          ],
+          "hp": 837.25,
+          "max_hp": 2125.2,
+          "energy": 100,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 1.45
+            },
+            {
+              "kind": "laser",
+              "cooldown": 0.7,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [
+          {
+            "id": 638,
+            "kind": "gun",
+            "pos": [
+              203.75,
+              -94.08,
+              13.19
+            ],
+            "vel": [
+              -239.65,
+              66.57,
+              -40.53
+            ]
+          }
+        ],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [
+          {
+            "kind": "gun",
+            "bearing": -0.244,
+            "dist": "near",
+            "age": 0.05
+          },
+          {
+            "kind": "gun",
+            "bearing": 2.801,
+            "dist": "far",
+            "age": 0.05
+          }
+        ],
+        "beams": [],
+        "events": [],
+        "zone": {
+          "center": [
+            158.74,
+            -86.79
+          ],
+          "radius": 380,
+          "next_center": [
+            138.63,
+            -218.21
+          ],
+          "next_radius": 240,
+          "shrink_start": 77.5,
+          "shrink_end": 97.5,
+          "dps": 35
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.371,
+      "recorded_action": {
+        "tick": 1104,
+        "move": [
+          0.0,
+          0.0
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          1.742,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1106,
+        "t": 55.3,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            171.7,
+            -84.66,
+            5.11
+          ],
+          "vel": [
+            17.34,
+            -2.68,
+            0
+          ],
+          "aim": [
+            1.342,
+            0
+          ],
+          "hp": 837.25,
+          "max_hp": 2125.2,
+          "energy": 98.3,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 1.35
+            },
+            {
+              "kind": "laser",
+              "cooldown": 0.6,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [
+          {
+            "id": 638,
+            "kind": "gun",
+            "pos": [
+              179.79,
+              -87.42,
+              9.14
+            ],
+            "vel": [
+              -239.65,
+              66.57,
+              -40.53
+            ]
+          }
+        ],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [],
+        "beams": [],
+        "events": [],
+        "zone": {
+          "center": [
+            158.74,
+            -86.79
+          ],
+          "radius": 380,
+          "next_center": [
+            138.63,
+            -218.21
+          ],
+          "next_radius": 240,
+          "shrink_start": 77.5,
+          "shrink_end": 97.5,
+          "dps": 35
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.371,
+      "recorded_action": {
+        "tick": 1106,
+        "move": [
+          -0.9883716976506176,
+          0.15205718425393827
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          1.342,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1108,
+        "t": 55.4,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            173.01,
+            -84.86,
+            5.14
+          ],
+          "vel": [
+            11.56,
+            -1.79,
+            0
+          ],
+          "aim": [
+            0.942,
+            0
+          ],
+          "hp": 776.05,
+          "max_hp": 2125.2,
+          "energy": 98.3,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 1.25
+            },
+            {
+              "kind": "laser",
+              "cooldown": 0.5,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [],
+        "beams": [],
+        "events": [
+          {
+            "type": "damaged",
+            "amount": 61.2,
+            "weapon": "gun",
+            "bearing": -0.346,
+            "by": 6
+          }
+        ],
+        "zone": {
+          "center": [
+            158.74,
+            -86.79
+          ],
+          "radius": 380,
+          "next_center": [
+            138.63,
+            -218.21
+          ],
+          "next_radius": 240,
+          "shrink_start": 77.5,
+          "shrink_end": 97.5,
+          "dps": 35
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.346,
+      "recorded_action": {
+        "tick": 1108,
+        "move": [
+          -0.9884300744375304,
+          0.15167724927430004
+        ],
+        "boost": true,
+        "jump": false,
+        "aim": [
+          0.942,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1110,
+        "t": 55.5,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            173.73,
+            -84.97,
+            5.15
+          ],
+          "vel": [
+            5.78,
+            -0.89,
+            0
+          ],
+          "aim": [
+            1.342,
+            0
+          ],
+          "hp": 776.05,
+          "max_hp": 2125.2,
+          "energy": 98.3,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 1.15
+            },
+            {
+              "kind": "laser",
+              "cooldown": 0.4,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [
+          {
+            "id": 640,
+            "kind": "gun",
+            "pos": [
+              193.02,
+              -92.8,
+              13.21
+            ],
+            "vel": [
+              -238.17,
+              72.35,
+              -39.31
+            ]
+          }
+        ],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [
+          {
+            "kind": "gun",
+            "bearing": -0.518,
+            "dist": "near",
+            "age": 0.1
+          },
+          {
+            "kind": "laser_charge",
+            "bearing": -0.396,
+            "dist": "near",
+            "age": 0.05
+          }
+        ],
+        "beams": [],
+        "events": [],
+        "zone": {
+          "center": [
+            158.74,
+            -86.79
+          ],
+          "radius": 380,
+          "next_center": [
+            138.63,
+            -218.21
+          ],
+          "next_radius": 240,
+          "shrink_start": 77.5,
+          "shrink_end": 97.5,
+          "dps": 35
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.346,
+      "recorded_action": {
+        "tick": 1110,
+        "move": [
+          0.0,
+          0.0
+        ],
+        "boost": false,
+        "jump": true,
+        "aim": [
+          1.342,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1112,
+        "t": 55.6,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            173.87,
+            -85,
+            5.16
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            1.742,
+            0
+          ],
+          "hp": 684.25,
+          "max_hp": 2125.2,
+          "energy": 98.3,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 1.05
+            },
+            {
+              "kind": "laser",
+              "cooldown": 0.3,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [
+          {
+            "kind": "gun",
+            "bearing": -1.157,
+            "dist": "mid",
+            "age": 0.1
+          }
+        ],
+        "beams": [],
+        "events": [
+          {
+            "type": "damaged",
+            "amount": 91.8,
+            "weapon": "gun",
+            "bearing": -0.524,
+            "by": 6,
+            "rear": true
+          }
+        ],
+        "zone": {
+          "center": [
+            158.74,
+            -86.79
+          ],
+          "radius": 380,
+          "next_center": [
+            138.63,
+            -218.21
+          ],
+          "next_radius": 240,
+          "shrink_start": 77.5,
+          "shrink_end": 97.5,
+          "dps": 35
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.524,
+      "recorded_action": {
+        "tick": 1112,
+        "move": [
+          0.0,
+          0.0
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          1.742,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1114,
+        "t": 55.7,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            173.44,
+            -84.93,
+            5.15
+          ],
+          "vel": [
+            -5.78,
+            0.89,
+            0
+          ],
+          "aim": [
+            1.342,
+            0
+          ],
+          "hp": 684.25,
+          "max_hp": 2125.2,
+          "energy": 98.3,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 0.95
+            },
+            {
+              "kind": "laser",
+              "cooldown": 0.2,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [
+          {
+            "id": 642,
+            "kind": "gun",
+            "pos": [
+              195.32,
+              -91.13,
+              13.19
+            ],
+            "vel": [
+              -225.1,
+              103.98,
+              -44.98
+            ]
+          }
+        ],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [
+          {
+            "kind": "gun",
+            "bearing": -0.361,
+            "dist": "near",
+            "age": 0.1
+          },
+          {
+            "kind": "gun",
+            "bearing": 3.014,
+            "dist": "far",
+            "age": 0.1
+          }
+        ],
+        "beams": [],
+        "events": [],
+        "zone": {
+          "center": [
+            158.74,
+            -86.79
+          ],
+          "radius": 380,
+          "next_center": [
+            138.63,
+            -218.21
+          ],
+          "next_radius": 240,
+          "shrink_start": 77.5,
+          "shrink_end": 97.5,
+          "dps": 35
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.524,
+      "recorded_action": {
+        "tick": 1114,
+        "move": [
+          -0.5885011172553458,
+          -0.8084964038195901
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          1.342,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1116,
+        "t": 55.8,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            172.43,
+            -84.77,
+            5.12
+          ],
+          "vel": [
+            -11.56,
+            1.78,
+            0
+          ],
+          "aim": [
+            0.942,
+            0
+          ],
+          "hp": 684.25,
+          "max_hp": 2125.2,
+          "energy": 96.6,
+          "max_energy": 100,
+          "grounded": true,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 0.85
+            },
+            {
+              "kind": "laser",
+              "cooldown": 0.1,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [
+          {
+            "id": 642,
+            "kind": "gun",
+            "pos": [
+              172.81,
+              -80.74,
+              8.69
+            ],
+            "vel": [
+              -225.1,
+              103.98,
+              -44.98
+            ]
+          }
+        ],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [],
+        "beams": [],
+        "events": [],
+        "zone": {
+          "center": [
+            158.74,
+            -86.79
+          ],
+          "radius": 380,
+          "next_center": [
+            138.63,
+            -218.21
+          ],
+          "next_radius": 240,
+          "shrink_start": 77.5,
+          "shrink_end": 97.5,
+          "dps": 35
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.524,
+      "recorded_action": {
+        "tick": 1116,
+        "move": [
+          0.0,
+          0.0
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          0.942,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1118,
+        "t": 55.9,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            171.59,
+            -84.64,
+            6.06
+          ],
+          "vel": [
+            -8.08,
+            1.24,
+            8.8
+          ],
+          "aim": [
+            1.342,
+            0
+          ],
+          "hp": 684.25,
+          "max_hp": 2125.2,
+          "energy": 96.6,
+          "max_energy": 100,
+          "grounded": false,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 0.75
+            },
+            {
+              "kind": "laser",
+              "cooldown": 0,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [
+          {
+            "id": 644,
+            "kind": "gun",
+            "pos": [
+              206.85,
+              -99.37,
+              14.64
+            ],
+            "vel": [
+              -231.1,
+              87.11,
+              -50.07
+            ]
+          }
+        ],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [
+          {
+            "kind": "gun",
+            "bearing": -0.649,
+            "dist": "near",
+            "age": 0.05
+          },
+          {
+            "kind": "reload",
+            "bearing": -0.374,
+            "dist": "near",
+            "age": 0.05
+          }
+        ],
+        "beams": [],
+        "events": [],
+        "zone": {
+          "center": [
+            158.74,
+            -86.79
+          ],
+          "radius": 380,
+          "next_center": [
+            138.63,
+            -218.21
+          ],
+          "next_radius": 240,
+          "shrink_start": 77.5,
+          "shrink_end": 97.5,
+          "dps": 35
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.524,
+      "recorded_action": {
+        "tick": 1118,
+        "move": [
+          0.9877629653290692,
+          -0.1559625734730106
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          1.342,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1120,
+        "t": 56,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            170.87,
+            -84.53,
+            6.77
+          ],
+          "vel": [
+            -6.89,
+            1.06,
+            6.6
+          ],
+          "aim": [
+            1.742,
+            0
+          ],
+          "hp": 684.25,
+          "max_hp": 2125.2,
+          "energy": 96.6,
+          "max_energy": 100,
+          "grounded": false,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 0.65
+            },
+            {
+              "kind": "laser",
+              "cooldown": 0,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [
+          {
+            "id": 644,
+            "kind": "gun",
+            "pos": [
+              183.74,
+              -90.66,
+              9.63
+            ],
+            "vel": [
+              -231.1,
+              87.11,
+              -50.07
+            ]
+          }
+        ],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [
+          {
+            "kind": "gun",
+            "bearing": -1.285,
+            "dist": "mid",
+            "age": 0.1
+          }
+        ],
+        "beams": [],
+        "events": [],
+        "zone": {
+          "center": [
+            158.74,
+            -86.79
+          ],
+          "radius": 380,
+          "next_center": [
+            138.63,
+            -218.21
+          ],
+          "next_radius": 240,
+          "shrink_start": 77.5,
+          "shrink_end": 97.5,
+          "dps": 35
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.524,
+      "recorded_action": {
+        "tick": 1120,
+        "move": [
+          0.9883716976506172,
+          -0.1520571842539411
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          1.742,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1122,
+        "t": 56.1,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            170.18,
+            -84.52,
+            7.27
+          ],
+          "vel": [
+            -6.89,
+            -0.14,
+            4.4
+          ],
+          "aim": [
+            1.342,
+            0
+          ],
+          "hp": 592.45,
+          "max_hp": 2125.2,
+          "energy": 96.6,
+          "max_energy": 100,
+          "grounded": false,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 0.55
+            },
+            {
+              "kind": "laser",
+              "cooldown": 0,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [],
+        "beams": [],
+        "events": [
+          {
+            "type": "damaged",
+            "amount": 91.8,
+            "weapon": "gun",
+            "bearing": -0.435,
+            "by": 6,
+            "rear": true
+          }
+        ],
+        "zone": {
+          "center": [
+            158.74,
+            -86.79
+          ],
+          "radius": 380,
+          "next_center": [
+            138.63,
+            -218.21
+          ],
+          "next_radius": 240,
+          "shrink_start": 77.5,
+          "shrink_end": 97.5,
+          "dps": 35
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.435,
+      "recorded_action": {
+        "tick": 1122,
+        "move": [
+          0.9997936268583195,
+          0.020315109979704607
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          1.342,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1124,
+        "t": 56.2,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            169.58,
+            -84.53,
+            7.54
+          ],
+          "vel": [
+            -5.69,
+            -0.12,
+            2.2
+          ],
+          "aim": [
+            0.942,
+            0
+          ],
+          "hp": 592.45,
+          "max_hp": 2125.2,
+          "energy": 96.6,
+          "max_energy": 100,
+          "grounded": false,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 0.45
+            },
+            {
+              "kind": "laser",
+              "cooldown": 0,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [],
+        "beams": [],
+        "events": [],
+        "zone": {
+          "center": [
+            158.74,
+            -86.79
+          ],
+          "radius": 380,
+          "next_center": [
+            138.63,
+            -218.21
+          ],
+          "next_radius": 240,
+          "shrink_start": 77.5,
+          "shrink_end": 97.5,
+          "dps": 35
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.435,
+      "recorded_action": {
+        "tick": 1124,
+        "move": [
+          0.9997776878895797,
+          0.021084942451098338
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          0.942,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "type": "obs",
+        "tick": 1126,
+        "t": 56.3,
+        "alive": 8,
+        "self": {
+          "id": 0,
+          "pos": [
+            169.1,
+            -84.55,
+            7.6
+          ],
+          "vel": [
+            -4.5,
+            -0.23,
+            0
+          ],
+          "aim": [
+            1.342,
+            0
+          ],
+          "hp": 164.05,
+          "max_hp": 2125.2,
+          "energy": 96.6,
+          "max_energy": 100,
+          "grounded": false,
+          "cubes": 8,
+          "upgrades": [
+            "plating",
+            "nanites",
+            "laser_damage"
+          ],
+          "weapons": [
+            {
+              "kind": "gun",
+              "cooldown": 0,
+              "stats": {
+                "damage": 45,
+                "cooldown": 0.24,
+                "speed": 252,
+                "range": 230,
+                "spread_deg": 0.6,
+                "mag": 12,
+                "reload": 2.4
+              },
+              "ammo": 10,
+              "reload": 0.35
+            },
+            {
+              "kind": "laser",
+              "cooldown": 0,
+              "stats": {
+                "damage": 371.7,
+                "charge": 0.75,
+                "min_charge": 0.15,
+                "min_frac": 0.35,
+                "hold_s": 2,
+                "cooldown": 1.65,
+                "range": 280,
+                "pierce": 0,
+                "charge_turn_mult": 1,
+                "cookoff": 0.6
+              },
+              "charge": 0
+            }
+          ],
+          "in_zone": true,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 11.2,
+            "muzzle_height": 9.8,
+            "hp": 1610,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 3.5,
+            "regen_per_s": 72,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          }
+        },
+        "mechs": [],
+        "projectiles": [],
+        "crates": [],
+        "cubes": [],
+        "pickups": [
+          {
+            "id": 8024,
+            "kind": "mortar",
+            "pos": [
+              195.21,
+              -53.35,
+              5.52
+            ]
+          },
+          {
+            "id": 8049,
+            "kind": "laser",
+            "pos": [
+              162.95,
+              -63.23,
+              5.45
+            ]
+          },
+          {
+            "id": 8050,
+            "kind": "laser",
+            "pos": [
+              191.26,
+              -99.15,
+              5.45
+            ]
+          }
+        ],
+        "sounds": [
+          {
+            "kind": "laser",
+            "bearing": -0.391,
+            "dist": "near",
+            "age": 0.1
+          }
+        ],
+        "beams": [
+          {
+            "by": 6,
+            "kind": "laser",
+            "path": [
+              [
+                218.83,
+                -105.4,
+                15.73
+              ],
+              [
+                172.04,
+                -82.33,
+                9.13
+              ]
+            ],
+            "age": 0.1
+          }
+        ],
+        "events": [
+          {
+            "type": "damaged",
+            "amount": 428.4,
+            "weapon": "laser",
+            "bearing": -0.399,
+            "by": 6
+          }
+        ],
+        "zone": {
+          "center": [
+            158.74,
+            -86.79
+          ],
+          "radius": 380,
+          "next_center": [
+            138.63,
+            -218.21
+          ],
+          "next_radius": 240,
+          "shrink_start": 77.5,
+          "shrink_end": 97.5,
+          "dps": 35
+        },
+        "offer": null,
+        "drops": []
+      },
+      "expected_bearing": -0.399,
+      "recorded_action": {
+        "tick": 1126,
+        "move": [
+          0.9986963807333156,
+          0.05104448168192502
+        ],
+        "boost": false,
+        "jump": false,
+        "aim": [
+          1.342,
+          0
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    }
+  ]
+}
