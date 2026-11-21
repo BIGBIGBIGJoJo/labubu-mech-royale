@@ -330,6 +330,16 @@ class TacticalPlanner:
         pressure=sorted(threats,key=lambda q:self._strength(q["actor"],q["d"]),reverse=True)[:3]
         tracks=self._projectiles(obs,min(deadline,begin+.0015))
         allow_boost=me.get("grounded",True) and me["energy"]>(12 if urgent else 35)
+        emergency_boost=False
+        # A visible charging laser can make the ordinary energy reserve unsafe.
+        # Admit boost only for a current-aim warning on the walking nav path,
+        # with enough energy for this entire decision interval. The existing
+        # scorer, energy rollout and collision checks still choose the action.
+        decision_energy=stats["boost_drain"]*self.dt*self.config["match"]["decide_every"]
+        if (not allow_boost and me.get("grounded",True) and me["energy"]>=decision_energy
+                and any(q["actor"].get("charging") and q.get("los") for q in pressure)):
+            emergency_boost=self._beam_cost(self.rollout(me,nav,False,stats),pressure,stats)>0
+            allow_boost=emergency_boost
         ranked=[]
         cheap_deadline=min(deadline-.004,begin+.006)
         for direction in unique:
@@ -385,5 +395,6 @@ class TacticalPlanner:
             result=(best[1],best[2])
             self.last_direction=best[1]
         self.last_report={"ms":(time.perf_counter()-begin)*1000,"candidates":len(ranked),
-                          "geometry_checked":checked,"projectiles":len(tracks),"fallback":best is None}
+                          "geometry_checked":checked,"projectiles":len(tracks),"fallback":best is None,
+                          "emergency_boost":emergency_boost}
         return result

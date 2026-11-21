@@ -129,6 +129,88 @@ class TacticalTests(unittest.TestCase):
         actor={'id':3,'kind':'mech','pos':[50,0,0],'weapons':['gun'],'cubes':0}
         self.assertGreater(self.planner._strength(actor,50),self.planner._strength(actor,150))
 
+    def laser_warning(self):
+        self.me['energy']=28.5
+        actor={'id':3,'kind':'mech','pos':[-50,0,0],'vel':[0,0,0],
+               'aim':[0,0],'charging':True,'weapons':['gun','laser'],'cubes':0}
+        return {'actor':actor,'d':50,'los':True}
+
+    def test_laser_warning_selects_valid_boost_below_normal_reserve(self):
+        threat=self.laser_warning()
+        direction,boost=self.planner.choose(self.obs,(0,1),[threat],self.stats,recover=True)
+        self.assertTrue(self.planner.last_report['emergency_boost'])
+        # Admitting a candidate alone is not enough: the returned action must
+        # use it and pass the ordinary geometry and energy rollout.
+        self.assertTrue(boost)
+        path=self.planner.rollout(self.me,direction,boost,self.stats)
+        corrected=self.planner._geometry(path,self.stats,time.perf_counter()+1,direction,boost)
+        self.assertIsNotNone(corrected)
+        self.assertGreater(corrected[-1][7],0)
+        walking=self.planner.rollout(self.me,direction,False,self.stats)
+        self.assertLess(self.planner._beam_cost(corrected,[threat],self.stats),
+                        self.planner._beam_cost(walking,[threat],self.stats))
+
+    def test_boost_reserve_stays_in_force_without_current_laser_warning(self):
+        for state in ('uncharged','aim_away','occluded','no_threat'):
+            with self.subTest(state=state):
+                threat=self.laser_warning()
+                if state=='uncharged':threat['actor']['charging']=False
+                if state=='aim_away':threat['actor']['aim']=[math.pi,0]
+                if state=='occluded':threat['los']=False
+                direction,boost=self.planner.choose(self.obs,(0,1),[] if state=='no_threat' else [threat],
+                                                    self.stats,recover=True)
+                self.assertFalse(boost)
+                self.assertFalse(self.planner.last_report['emergency_boost'])
+
+    def test_laser_warning_requires_energy_for_whole_decision(self):
+        threat=self.laser_warning()
+        required=self.stats['boost_drain']*self.planner.dt*self.config['match']['decide_every']
+        self.me['energy']=required-.001
+        direction,boost=self.planner.choose(self.obs,(0,1),[threat],self.stats,recover=True)
+        self.assertFalse(boost)
+        self.assertFalse(self.planner.last_report['emergency_boost'])
+        self.me['energy']=required
+        self.planner.choose(self.obs,(0,1),[threat],self.stats,recover=True)
+        self.assertTrue(self.planner.last_report['emergency_boost'])
+
+    def test_laser_warning_cannot_enable_airborne_boost(self):
+        threat=self.laser_warning()
+        self.me['grounded']=False
+        self.me['pos'][2]=20
+        direction,boost=self.planner.choose(self.obs,(0,1),[threat],self.stats,recover=True)
+        self.assertFalse(boost)
+        self.assertFalse(self.planner.last_report['emergency_boost'])
+
+    def test_laser_warning_cannot_override_collision_rejection(self):
+        threat=self.laser_warning()
+        class BlockedMap(FlatMap):
+            def move_clear(self,start,end,radius,height):return False
+        self.planner.map=BlockedMap()
+        direction,boost=self.planner.choose(self.obs,(0,1),[threat],self.stats,recover=True)
+        self.assertTrue(self.planner.last_report['emergency_boost'])
+        self.assertTrue(self.planner.last_report['fallback'])
+        self.assertEqual(direction,(0,0))
+        self.assertFalse(boost)
+
+    def test_emergency_boost_rollout_retains_own_laser_slowdown(self):
+        threat=self.laser_warning()
+        self.me['weapons'][1]={'kind':'laser','charge':.2}
+        direction,boost=self.planner.choose(self.obs,(0,1),[threat],self.stats,recover=True)
+        self.assertTrue(self.planner.last_report['emergency_boost'])
+        path=self.planner.rollout(self.me,direction,True,self.stats)
+        corrected=self.planner._geometry(path,self.stats,time.perf_counter()+1,direction,True,True)
+        self.assertIsNotNone(corrected)
+        self.assertAlmostEqual(math.hypot(*corrected[-1][4:6]),
+                               self.stats['boost_speed']*self.stats['charge_move_mult'])
+        self.assertAlmostEqual(corrected[-1][7],28.5-self.stats['boost_drain']*self.planner.horizon)
+
+    def test_original_urgent_boost_gate_remains_available_without_warning(self):
+        self.me['energy']=30
+        self.me['vel']=[self.stats['walk_speed'],0,0]
+        direction,boost=self.planner.choose(self.obs,(1,0),[],self.stats,urgent=True)
+        self.assertTrue(boost)
+        self.assertFalse(self.planner.last_report['emergency_boost'])
+
 
 if __name__=='__main__':
     unittest.main()
