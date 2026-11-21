@@ -3,6 +3,13 @@
 Verified on November 21, 2026. Official score means mean `16 - place` over
 48 practice matches. Private-room placement is a different diagnostic.
 
+**Container-check correction:** during aggressive-v2 validation, the Windows
+checker was found to rewrite `/arena` as `C:\\arena` before launching the Linux
+bot. Earlier Windows-launched Docker results below establish protocol behavior
+with the map fallback, not map-enabled container timing. Host real-map tests and
+official scores are separate evidence. Current validation runs the unmodified
+checker inside Linux with the arena mounted; preflight confirms map loading.
+
 ## Official submissions
 
 | Submission | Commit | Practice score | Result |
@@ -16,9 +23,10 @@ Verified on November 21, 2026. Official score means mean `16 - place` over
 | BB-391F3E46 | e5f021a2a0364a1db2d162afe0e3a29b9ed8b792 | 2.29 | Accepted; route/reload fixes did not improve practice score |
 | BB-C709FC88 | 54c9f5f30f3a16cfd3bf276cfe31f7e3037309a9 | 2.33 | Accepted; energy change remains below the selected best |
 | BB-AC10AB33 | 01df3dc61f89352c4d54b8aa93b3922a206d8355 | 2.69 | Accepted; bounded defensive continuation, previous selective objective |
+| BB-A29B40E8 | 219fde26f0004c10946bf34613c0c8287690d697 | 4.63 | Accepted; first aggressive candidate, below retained best |
 
 The strategy-v2 candidate improved 4.19 to 4.75 (approximately 13.4%).
-Nine submissions have been accepted. The hourly quota replenishes over time;
+Ten submissions have been accepted. The hourly quota replenishes over time;
 check the authenticated panel before any further attempt.
 
 The automatically selected entry is the commit above; this is **not** a claim
@@ -31,7 +39,61 @@ submission is explicitly selected. No tournament placement is guaranteed.
 
 BB-AC10AB33 scored 2.69. The user subsequently changed the objective to greedy,
 aggressive play. The new candidate follows AGGRESSIVE_PLAN.md; the 6.0 target
-remains unmet and none of the selective scores measures the new implementation.
+remains unmet. The first aggressive implementation scored 4.63; none of the
+selective scores measures it.
+
+## Aggressive-v2 movement correction
+
+This candidate preserves the submitted aggressive-v1 firing and economy policy.
+It adds bounded local routing for confirmed small disconnected components and
+validates future-zone goal projections, including failed-goal exclusions. The
+diagnosis is in OPTIMIZATION_REPORT.md; implementation details and limitations
+are in LOCAL_ROUTE_PLAN.md and ZONE_GOAL_PLAN.md.
+
+- **467 tests pass**, including 24 local-route, four root-integration and 17
+  zone-projection checks.
+- Corrected Linux-container checker: 300/300 replies on time, zero invalid
+  lines, wrong ticks or discarded older replies; p99 33.9 ms, maximum 34.6 ms,
+  ready in 3,229 ms. Both checker and bot shared one CPU, 512 MB, no swap/network,
+  uid 65534, read-only files and a 64 MB tmpfs. A separate identical-image
+  preflight confirmed `map.available=True`, 259 prisms and 774,680 terrain samples.
+- Three additional recorded-scenario streams passed the same unmodified checker
+  inside that restricted image: **660/660 timely replies**, maximum 33.3 ms,
+  zero missed/late/stale/wrong-tick/invalid replies. Host replay of the same
+  observations naturally activated local recovery on all 660 decisions without
+  forcing internal state. The container exposed normal actions, not activation
+  telemetry; these streams are timing/conformance tests, not simulated matches.
+- Real-map host stress: 580 schema-valid decisions, maximum 40.43 ms, none above
+  50 ms. This includes dense fights, recovery, urgent rotation and resources.
+- An additional 390 full-policy decisions with local recovery active all
+  produced finite actions below 50 ms; maximum 40.04 ms. Positions were held
+  fixed to exercise discovery/following cost, so this is not a match simulation.
+- Production routing and the unchanged tactical controller completed 1,200
+  checked 0.1-second motion sweeps without a blocked applied segment. Each
+  40-second mechanical run includes route discovery. The deeper pocket exited
+  in two stages after approximately 27.5 seconds under the harness's separate
+  six-millisecond navigation window. Actual policy shares its existing overall
+  deadline and can give navigation more remaining time.
+- Zone-projection helper: 150 exact-state calls returned no invalid endpoints
+  or holds; maximum 1.12 ms with a 1.5 ms endpoint budget. Expensive optional
+  exposure ranking is skipped when insufficient time remains.
+
+One routing call in the mechanical run took 17.28 ms despite a six-millisecond
+requested component budget. Its cause was not instrumented. A subsequent 534-call
+instrumented discovery check peaked at 5.12 ms and did not reproduce it. The
+existing geometry calls are non-preemptible; the full-policy/container checks
+above are the relevant local deadline evidence, not a hard timing guarantee.
+The mechanical inputs freeze enemies and omit damage/network effects. They do
+not establish survival, kills, or an official score improvement.
+
+The frozen private diagnostic finished **2nd with two kills and three cubes**
+at 154.4 seconds. It dealt 4,280 damage, took 3,486 damage and took zero zone
+damage. All 1,542 actions computed below 50 ms (maximum 32.98 ms), with zero
+policy errors; two observations were skipped by the online interface. It
+travelled 1,640 m. No sustained navigation stall or blocked rotate/recover/
+position goal was found. Local recovery never activated in this particular
+match: it validates ordinary delegation, not live use of the fine route search.
+The rank and kills are an uncontrolled FFA diagnostic, not the official score.
 
 ## Aggressive-v1 candidate verification
 
@@ -101,6 +163,12 @@ with zero policy errors; six online observations were skipped. It travelled
 same wounded target and was followed by an observed hit and kill at 39.9 seconds.
 This is an uncontrolled private match with different opponents and world state,
 not an official score or a controlled comparison with the earlier diagnostic.
+
+The official aggressive-v1 result was **4.63**, below the retained best of 4.75
+and the 6.0 target. It improves on the prior selective candidate's 2.69, but the
+combined changes do not isolate which mechanism caused that difference. The
+next candidate isolates bounded local route recovery; submitted source 219fde2
+is preserved.
 
 ## Selective-v4 permission candidate
 

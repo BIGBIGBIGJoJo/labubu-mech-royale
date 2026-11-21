@@ -15,10 +15,12 @@ from stdin and flushes one action per newest observation to stdout.
 python -u bot.py
 python check/check.py -- python -u bot.py
 docker build --platform linux/amd64 -t labubu-mech-royale .
-python check/check.py --map-dir /arena -- docker run --rm -i --network none --cpus 1 --memory 512m --memory-swap 512m --pids-limit 128 --read-only --tmpfs /tmp:rw,size=64m --user 65534:65534 -v "$PWD/arena:/arena:ro" labubu-mech-royale
+docker run --rm -i --network none --cpus 1 --memory 512m --memory-swap 512m --pids-limit 128 --read-only --tmpfs /tmp:rw,size=64m --user 65534:65534 --entrypoint python3 -v "${PWD}/arena:/arena:ro" -v "${PWD}/check:/check:ro" -v "${PWD}/mechfight.schema.json:/schema.json:ro" labubu-mech-royale /check/check.py --schema /schema.json --map-dir /arena -- python3 -u /bot/bot.py
 ```
 
-On PowerShell, use `-v "${PWD}/arena:/arena:ro"` for the mount argument.
+Run this command from the repository root. Running the checker inside Linux
+preserves `/arena` on Windows too; a Windows-host checker rewrites that argument
+as a Windows path. The checker and bot share the container's resource limits.
 The checker replays recorded observations. Passing it confirms protocol
 conformance; it does **not** establish a gameplay score.
 
@@ -38,12 +40,17 @@ The separate navigation-stall diagnostic is described in
 fractional-speed tactical candidate in [TACTICAL_RECOVERY_PLAN.md](TACTICAL_RECOVERY_PLAN.md).
 Local collision-clear movement does not establish global route connectivity;
 see [VALIDATION.md](VALIDATION.md) for results tied to exact candidate versions.
+The current diagnosis and next scoring experiment are documented in
+[OPTIMIZATION_REPORT.md](OPTIMIZATION_REPORT.md). The aggressive-v2 movement
+changes follow [LOCAL_ROUTE_PLAN.md](LOCAL_ROUTE_PLAN.md) and
+[ZONE_GOAL_PLAN.md](ZONE_GOAL_PLAN.md).
 [SELECTIVE_V4_PLAN.md](SELECTIVE_V4_PLAN.md) records the historical selective
-controller; its evidence and fixed finishing-deadline gates are not active in aggressive-v1.
+controller; its evidence and fixed finishing-deadline gates are not active in the current aggressive controller.
 Earlier experiments remain documented in [STRATEGY_V2.md](STRATEGY_V2.md).
 
 - `bot.py`: strategy, recovery, upgrades, resource completion, and zone prediction.
 - `arena_map.py`: spatial index, terrain, solid geometry, bounded navigation.
+- `local_route.py`: bounded recovery from a confirmed small disconnected route component.
 - `combat.py`: shared aim arbitration and weapon control.
 - `engagement.py`: proactive target selection, short-kill estimates, focus and reachability;
   the prior selective controller remains separately tested.

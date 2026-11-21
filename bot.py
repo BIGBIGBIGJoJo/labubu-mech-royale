@@ -9,6 +9,7 @@ import mechfight as mf
 from arena_map import ArenaMap
 from combat import Combat
 from engagement import AggressiveEngagement
+from local_route import LocalRouteRecovery
 from positioning import FinishSafety
 from tactical import TacticalPlanner
 
@@ -36,6 +37,7 @@ class Bot:
         self.engagement = AggressiveEngagement(self.config, self.map.line_of_fire)
         self.finish_safety = FinishSafety(self.config, self.map)
         self.tactical = TacticalPlanner(self.config, self.map)
+        self.route_recovery = LocalRouteRecovery(self.map)
         self.slot = hello["slot"]
         self.recover = False
         self.mode = "explore"
@@ -426,8 +428,11 @@ class Bot:
         if not candidates:
             return [*center, self.map.ground_height(*center)]
         best, score, best_position_cost = list(p), float("inf"), None
+        # An out-of-circle winner needs endpoint validation after scoring.
+        # Reserve that work inside the existing deadline, not from movement.
+        scoring_deadline = deadline - .0015 if distance(p, center) + s["radius"] > radius else deadline
         for point in candidates:
-            if time.perf_counter() > deadline:
+            if time.perf_counter() > scoring_deadline:
                 break
             if any(distance(point, failed) < 8 for failed, _ in self.failed_goals):
                 continue
@@ -439,11 +444,67 @@ class Bot:
             if cost < score:
                 best, score, best_position_cost = point, cost, position_cost
         if distance(best, center) + s["radius"] > radius:
-            u = unit(best[0] - center[0], best[1] - center[1])
-            r = max(0, radius - s["radius"] - 15)
-            best = [center[0] + r * u[0], center[1] + r * u[1], self.map.ground_height(center[0] + r * u[0], center[1] + r * u[1])]
-            return best
+            return self.project_zone_goal(obs, threats, s, best, candidates, center, radius, deadline)
         return self.recovery_escape_goal(obs, threats, s, best, best_position_cost, deadline)
+
+    def project_zone_goal(self, obs, threats, s, outside, candidates, center, radius, deadline):
+        """Return a validated future-circle endpoint, or an explicit local hold.
+
+        Clearance proves only the endpoint; navigation still verifies its route.
+        The failed-goal filter applies after projection as well as before it.
+        """
+        origin = obs["self"]["pos"]
+        if time.perf_counter() >= deadline:
+            return list(origin)
+        direction = unit(outside[0] - center[0], outside[1] - center[1])
+        projected_radius = max(0, radius - s["radius"] - 15)
+        spacing = max(8.0, 2 * s["radius"])
+
+        def valid(point):
+            return (distance(point, center) + s["radius"] <= radius + 1e-6
+                    and not any(distance(point, failed) < 8 for failed, _ in self.failed_goals)
+                    and self.map.point_clear(point, s["radius"], s["height"]))
+
+        def projected(r):
+            x, y = center[0] + r * direction[0], center[1] + r * direction[1]
+            return [x, y, self.map.ground_height(x, y)]
+
+        original = projected(projected_radius)
+        if valid(original):
+            return original
+        checked = [original]
+        alternatives = []
+        # Validate endpoints before spending the remaining budget on exposure
+        # scoring, so an expensive ray cannot discard an already-clear option.
+        for point in candidates:
+            if time.perf_counter() >= deadline:
+                break
+            if valid(point):
+                alternatives.append(list(point))
+        for index in range(1, 9):
+            if time.perf_counter() >= deadline:
+                break
+            point = projected(max(0, projected_radius - index * spacing))
+            if any(distance(point, previous) < .01 for previous in checked):
+                break
+            checked.append(point)
+            if valid(point):
+                alternatives.append(point)
+        if not alternatives:
+            return list(origin)
+        best, score = alternatives[0], float("inf")
+        for point in alternatives:
+            # Exposure scoring can trace five rays. Keep its last atomic call
+            # out of the endpoint reserve; a validated incumbent is sufficient.
+            if time.perf_counter() + .002 >= deadline:
+                break
+            cost = self.position_cost(point, threats, center, radius, s["radius"], self.recover, s["muzzle_height"])
+            cost += distance(point, origin) * .22
+            if not self.recover:
+                cost += distance(point, center) * .07
+            if cost < score:
+                best, score = point, cost
+        return best
 
     def recovery_escape_goal(self, obs, threats, s, baseline, baseline_cost, deadline):
         """Try a short verified escape when recent damage makes exposed holding costly."""
@@ -496,8 +557,13 @@ class Bot:
                 best, score = point, cost
         return best
 
-    def check_route_progress(self, obs, goal, navigation, exposed):
+    def check_route_progress(self, obs, goal, navigation, exposed, route_status=None):
         """Retire unreachable cover instead of repeatedly choosing its endpoint."""
+        if route_status in ("local_searching", "local_following"):
+            # A bounded escape is already reconsidering this position. Keep the
+            # strategic goal while discovery and checked local motion continue.
+            self.goal_progress = None
+            return
         if self.mode not in ("recover", "rotate", "position"):
             self.goal_progress = None
             return
@@ -508,7 +574,8 @@ class Bot:
             tracking = self.goal_progress = {"goal": list(goal), "distance": remaining, "since": t}
         if remaining < tracking["distance"] - 2:
             tracking.update(distance=remaining, since=t)
-        blocked = getattr(self.map, "last_route_status", None) == "unreachable"
+        status = route_status if route_status is not None else getattr(self.map, "last_route_status", None)
+        blocked = status == "unreachable"
         holding = math.hypot(*navigation) < .1 and t - tracking["since"] >= 2
         if remaining > 8 and (blocked or (holding and (exposed or self.mode == "rotate"))):
             self.failed_goals.append((list(goal), t + 12))
@@ -876,8 +943,11 @@ class Bot:
         combat = self.combat.plan(obs, target, allow_fire=allow_fire,
                                   emergency=urgent or (self.recover and not permit_short_charge),
                                   protected_ids=protected_ids, quiet_reload=quiet_reload)
-        navigation = self.map.navigate(p, goal, s["radius"], s["height"], deadline=deadline - .012)
-        self.check_route_progress(obs, goal, navigation, bool(visible))
+        if self.route_recovery.arena is not self.map:
+            self.route_recovery = LocalRouteRecovery(self.map)
+        navigation, tactical_goal = self.route_recovery.navigate(
+            obs, goal, s, request_recovery=self.planner_stalled, deadline=deadline - .012)
+        self.check_route_progress(obs, goal, navigation, bool(visible), self.route_recovery.status)
         if distance(p, goal) < 1.5:
             navigation = (0, 0)
         motion_weapons = [({**w, "charge": max(.001, w.get("charge", 0)) if combat["fire"][i] else 0}
@@ -889,7 +959,7 @@ class Bot:
         shot_energy = sum(w["stats"].get("energy", 3) for i, w in enumerate(me["weapons"])
                           if w and w["kind"] == "lightning" and combat["fire"][i])
         prior_tactical_report = self.tactical.last_report
-        move, boost = self.movement(motion_obs, navigation, threats, s, urgent, deadline, goal,
+        move, boost = self.movement(motion_obs, navigation, threats, s, urgent, deadline, tactical_goal,
                                     boost_emergency=boost_emergency, shot_energy=shot_energy)
         # movement() can use its own deadline fallback without calling choose;
         # do not misattribute a retained report from an earlier decision.
@@ -926,8 +996,9 @@ class Bot:
         self.last_move = move
         self.last_navigation = tuple(navigation)
         self.last_navigation_fallback = navigation_fallback
-        self.last_translation_required = distance(p, goal) >= 1.5
+        self.last_translation_required = distance(p, tactical_goal) >= 1.5
         self.telemetry = {"mode": self.mode, "state": self.state, "goal": goal, "resource": self.resource_key,
+                          "tactical_goal": tactical_goal,
                           "target": target.get("id") if target else None,
                           "spacing_target": spacing_target.get("id") if spacing_target else None,
                           "target_hp": target.get("hp") if target else None,
@@ -943,7 +1014,8 @@ class Bot:
                                          "finish_deadline": decision.finish_deadline,
                                          "entry_evidence_at": decision.entry_evidence_at},
                           "finish_safety": {},
-                          "route_status": getattr(self.map, "last_route_status", None),
+                          "route_status": self.route_recovery.status,
+                          "local_route": self.route_recovery.last_report,
                           "escape_anchor": None,
                           "safety_ms": 0.0,
                           "recover": self.recover, "threats": len(visible), "stuck": stuck,

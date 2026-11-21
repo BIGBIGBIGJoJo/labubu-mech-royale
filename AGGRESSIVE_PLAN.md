@@ -92,3 +92,25 @@ full-health mech when no close mech or validated short kill takes precedence.
 
 BB-AC10AB33 scored 2.69 using the previous selective policy. That result cannot
 be attributed to this new aggressive candidate, and the historical best remains 4.75.
+
+## Aggressive-v2: isolate demonstrated movement losses
+
+The first aggressive submission, BB-A29B40E8 / `219fde2`, scored 4.63. The
+historical best remains 4.75 and the 6.0 target is unmet. Preserve its firing,
+economy and combat thresholds while correcting two reproduced route failures.
+
+1. A small coarse graph component can hide an exact, walkable narrow exit.
+   Search locally and incrementally only after confirmed failure or a sustained
+   planner stall; use current body dimensions and existing navigation deadlines.
+   A checked local exit guides tactical motion without replacing the strategic
+   goal or combat target. Full hazard/collision checks remain authoritative.
+2. Zone projection can replace a scored position with an unchecked point inside
+   a building, including a recently failed goal. Validate the projected body,
+   future-circle fit and failed-goal exclusion. If needed, use existing valid
+   candidates or a bounded set of inward alternatives; never invent a valid
+   destination when the budget expires.
+
+The separate implementation plans are LOCAL_ROUTE_PLAN.md and ZONE_GOAL_PLAN.md.
+OPTIMIZATION_REPORT.md distinguishes demonstrated controller defects from an
+unproven explanation of aggregate official score. Renew full validation and
+submit an exact immutable commit; retain the higher officially measured entry.
