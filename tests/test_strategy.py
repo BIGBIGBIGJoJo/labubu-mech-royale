@@ -336,15 +336,15 @@ class StrategyTests(unittest.TestCase):
         threat = {"actor": enemy, "d": 20, "los": True, "risk": 2}
         self.assertIsNone(self.bot.resource_goal(self.obs, [threat]))
 
-    def test_distant_target_pursuit_preempts_cube_detour(self):
+    def test_authorized_short_cube_detour_keeps_distant_target_fire(self):
         self.obs["cubes"] = [{"id": 5001, "pos": [0, 15, 0]}]
         self.obs["mechs"] = [self.enemy(150)]
         action = self.bot.act(self.obs)
-        self.assertEqual(self.bot.mode, "engage")
-        self.assertIsNone(self.bot.resource_key)
-        self.assertGreater(action["move"][0], 0.5)
+        self.assertEqual(self.bot.mode, "detour")
+        self.assertEqual(self.bot.resource_key, ("cubes", 5001))
+        self.assertEqual(self.bot.telemetry["pursuit_target"], 5)
         self.assertTrue(action["fire"][0],
-                        "Pursuit can coexist with a valid shot")
+                        "A brief authorized detour keeps a valid nearest-enemy shot")
 
     def test_close_enemy_blocks_resource_detour(self):
         self.obs["cubes"] = [{"id": 5001, "pos": [0, 15, 0]}]

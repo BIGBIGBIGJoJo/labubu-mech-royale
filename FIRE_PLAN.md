@@ -1,5 +1,11 @@
 # Pursuit fire plan
 
+Current revision note: RESOURCE_PURSUIT_PLAN.md adds the user-authorized,
+bounded pickup movement exception. Nearest combat targeting and the shared
+reload/healing rules below remain in effect. CACHE_PLAN.md describes the
+separate exact terrain optimization. The older no-detour rule below describes
+the original pursuit experiment and is superseded only by that bounded exception.
+
 Written before implementation, based on exact best39b6d50. The user now requests fast pursuit of the nearest enemy, maximum available firepower, reload when no enemy is near, and healing at low health when no enemy is near. Mechs and NPCs have equal target priority. Near means a held weapon's usable geometric range, independent of magazine, cooldown and current aim. This replaces the earlier selective-fight restrictions.
 
 ## Concrete changes

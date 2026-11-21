@@ -1,5 +1,11 @@
 # Pursuit orchestration plan
 
+Current revision note: RESOURCE_PURSUIT_PLAN.md adds the user-authorized,
+bounded pickup movement exception. Nearest combat targeting and the shared
+reload/healing rules below remain in effect. CACHE_PLAN.md describes the
+separate exact terrain optimization. The older no-detour rule below describes
+the original pursuit experiment and is superseded only by that bounded exception.
+
 Written before implementation. This candidate starts at exact retained best `39b6d509af8e82b0ceb9e1c430dd964674d7488e` (official 4.75). The updated request is to move quickly toward the nearest enemy, use the greatest practical firepower, reload when no enemy is near, and heal at low health when no enemy is near. Target score remains 6.0. The official placement score and the requested aggressive behavior are separate evaluation criteria; kills alone are not the official score.
 
 ## Confirmed decisions

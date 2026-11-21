@@ -27,9 +27,11 @@ checker inside Linux with the arena mounted; preflight confirms map loading.
 | BB-152A342F | a237d0beb3bbb1ad47c059d233bbf9f868d3408f | 4.60 | Accepted; movement correction did not improve official score |
 | BB-0962E9D9 | 005e830f22800cb32b5c9bbca94a99e0e1fae47d | 4.58 | Accepted; first-magazine preference did not improve official score |
 | BB-622AA903 | f0609d61c0d199a7311c0338abc912345fc14145 | 4.63 | Accepted; drop-contestation memory did not improve official score |
+| BB-C938CB71 | 919f826b217691b18842baace9ea0e2dd7cdd499 | 4.21 | Accepted; nearest-pursuit policy did not improve official score |
+| BB-63F04071 | 1727670f0f04dd9fd456b6b5dc6fae063fe54489 | 4.08 | Accepted; restoring gun-only spacing did not improve official score |
 
 The strategy-v2 candidate improved 4.19 to 4.75 (approximately 13.4%).
-Thirteen submissions have been accepted. The hourly quota replenishes over time;
+Fifteen submissions have been accepted. The hourly quota replenishes over time;
 check the authenticated panel before any further attempt.
 
 The automatically selected entry is the commit above; this is **not** a claim
@@ -45,7 +47,7 @@ aggressive play. The first aggressive implementation scored 4.63; none of the
 selective scores measures it. The current design is in PROGRAM_DESIGN.md and
 the three current strategy-agent plans. The 6.0 target remains unmet.
 
-## Current candidate: nearest-enemy pursuit
+## Nearest-enemy pursuit: completed experiment
 
 The user updated the objective to fast nearest-enemy pursuit, maximum available
 firepower, optional reloads when no enemy is nearby, and low-health recovery
@@ -93,7 +95,145 @@ The first unbounded visibility revision exceeded 50 ms in five of 200 dense
 cases, with a maximum 99.13 ms. The final revision budgets visibility work
 between map rays while preserving all actors and conservative unknown handling.
 The budget cannot preempt an individual ray; measured passing samples are not
-a universal real-time guarantee. No official pursuit score is available yet.
+a universal real-time guarantee. The official pursuit result is **4.21** (BB-C938CB71); the selected best remains **4.75**. The 6.0 target is unmet.
+
+## Additional pursuit diagnostics
+
+Two further frozen-source private matches checked the resource-acquisition and
+quiet-healing concern. They ended seventh (zero kills/cubes) and third (three
+kills, fourteen cubes, gun plus laser). Both took zero zone damage. There were
+2,015 actions, seven skipped online observations, zero policy errors and zero
+decisions above 50 ms; maximum computation was 32.70 ms.
+
+Across these actions, the audit found no recovery while near, no near-enemy
+partial-reload admissions, no resource override during pursuit and no incomplete
+proximity decisions. The seventh-place run regained 1,035 HP in a quiet recovery
+interval. In the third-place run, thirteen of fourteen cubes were acquired with
+no pursuit target, and one was incidental at a combat transition; quiet looting
+also acquired lightning and then laser. Thus resource collection and healing
+work in quiet windows. The concern is lost resource opportunities during
+continuous pursuit, not universal resource denial. Random private results do
+not establish an official score improvement.
+
+## Gun-only combat spacing: completed experiment
+
+This isolated follow-up starts at submitted pursuit commit `919f826` (4.21),
+with `39b6d50` (4.75) still retained as the official best. It restores the existing
+70 m gun preference against mechs when only the gun is held, so a close enemy
+does not erase that movement preference. NPC, multiple-weapon and occluded
+approach behavior stays at pursuit-v1. Target ordering, combat, reload and
+healing contracts are unchanged. See SPACING_PLAN.md for the hypothesis,
+conditional replay evidence and validation. The official result was **4.08**
+(BB-63F04071), so this change was not promoted or included in the resource revision.
+
+Frozen tactical SHA256 is
+`cdbf955645840bc3c36d49861410172225d7962d35dcc9b53548526a47278491`.
+The only executable runtime difference from pursuit-v1 is the two-line anchor
+restoration in tactical.py. The final source passes **224 tests**. Host stress
+completed **580 valid decisions**, none above 50 ms, maximum 31.20 ms.
+
+The restricted real-map Linux checker returned **300/300 replies on time**,
+with zero missing, late, stale, wrong-tick or invalid replies. Ready took
+2,912 ms; p50 10.5 ms, p90 23.7 ms, p99 27.8 ms, maximum 30.6 ms. The checker
+and bot shared one CPU and 512 MB under the documented isolation limits.
+Same-image preflight confirmed 259 map prisms and 774,680 terrain samples.
+
+The frozen private integration match ended **15th, zero kills and zero cubes**,
+last observed at 22.8 seconds. It dealt 877.5 damage and took 1,375.74 observed
+damage, including 995.4 laser damage from its final gun-and-laser opponent;
+zone damage was zero. There were 224 actions, five skipped online observations,
+zero policy errors and zero decisions above 50 ms; maximum computation was
+25.43 ms. Twenty clear-mech frames exercised the restored preference below
+70 m (minimum observed target distance 64.45 m). A trace audit found no nearest,
+reload, healing or pursuit/resource contract violations; all source hashes
+matched. One nearby assessment was incomplete and conservatively treated as
+nearby. This adverse random result is retained; it does not establish an
+official improvement or isolate a causal effect of the spacing change.
+
+## Current candidate: bounded resource interruptions
+
+The user authorized brief, safe collection of nearby upgrades followed by a
+return to nearest-enemy pursuit. This candidate starts at pursuit `919f826`
+(4.21). The lower-scoring spacing revision is excluded; the 4.75 entry remains
+selected. RESOURCE_PURSUIT_PLAN.md specifies the fixed lease, current-item
+scope, route/exposure checks, completion/abort behavior and unchanged combat
+target/reload/healing rules.
+
+It also includes an exact within-ray terrain endpoint cache, documented in
+CACHE_PLAN.md. The isolated cache had 4,467 equal-output ray comparisons,
+219 passing tests and 252 timely full-policy benchmark calls. Those isolated
+measurements are not a validation claim for the combined resource candidate.
+Final combined-source validation and official results will be recorded below.
+
+The first combined runtime (`d2a2fbe7` bot hash) passed 258 tests, 580 host
+stress decisions (maximum 31.65 ms) and the restricted recorded checker
+(300/300 timely replies, maximum 30.2 ms). However, its positive real-map
+resource fixture admitted **zero of 100 attempts inside the restricted Linux
+container**, despite successful host admission. It was not submitted.
+
+Container profiling located the difference: two endpoint-exposure rays consumed
+the three-millisecond optional slice before any route query could start. A
+diagnostic local-budget sweep admitted 0/20 at 3 ms, 1/20 at 4 ms, and 20/20
+at both 5 and 6 ms. The 6 ms sample's maximum complete decision was 24.70 ms.
+The production correction grants up to 6 ms locally while retaining the
+absolute 15 ms-from-decision-start cutoff and 17 ms downstream reserve. All
+exposure, route, pickup, lease and abort conditions remain in effect. The
+corrected image requires a new active-fixture check, not merely a checker pass.
+
+The first 6 ms build (`2413d274`) passed the active container check, but a
+subsequent dense-loot regression found that a weapon detour did not account
+for incidental cubes collected at its endpoint. This matters for weapons and
+cubes lying together after a mech dies. The correction counts endpoint cubes
+for every item category, using the cube collection radius, and validates the
+enlarged body at the endpoint and on the return route. Resource values and
+cube-specific threshold rules remain separate. That intermediate build was
+not submitted; its private diagnostics are not validation of the corrected hash.
+
+### Corrected frozen source
+
+Bot SHA256: `2dbd32bf919bff694308167a0d5ece996fbd2028e3321d6f2d0b9f80d216e50d`.
+Map SHA256: `834f9142692de5846d5f9640620f2e313561336c7a9e235252fb972f729cac60`.
+Combat and tactical files remain the original pursuit versions.
+
+- **262 tests pass**, including 43 resource tests and five cache regressions.
+- Corrected restricted Linux recorded checker: **300/300 replies on time**,
+  zero missing, late, stale, wrong-tick or invalid replies; ready 2,947 ms,
+  p50 10.2 ms, p90 20.9 ms, p99 25.9 ms, maximum 26.5 ms. Checker and bot
+  shared one CPU and 512 MB with the documented isolation limits.
+- Same-image active-fixture check: **97/100 admissions**, three conservative
+  optional-budget rejections, zero decisions above 50 ms; maximum full decision
+  28.83 ms and active optional phase 5.44 ms. It confirmed real-map loading
+  with 259 prisms and 774,680 terrain samples.
+- In a conditional controller continuation using documented 20 Hz movement
+  and the real map, the bot reached legal laser take range in 1.7 seconds
+  (3.08 m) and resumed nearest pursuit after an injected acquisition event.
+  External actors/items were stationary and damage was not simulated. This
+  verifies pickup mechanics; it is not an actual match acquisition or score.
+- Final host active sample: 100/100 admissions, maximum full decision 22.38 ms.
+  The corrected dense 256-cube case rejected 100/100 unsafe candidates,
+  maximum full decision 23.57 ms, optional phase maximum 5.39 ms.
+- Fresh final-source private match: **11th, zero kills and cubes**, gun only,
+  last observed at 49.9 seconds. It dealt 1,575 damage and took 1,449.45
+  observed damage, with zero zone damage. There were 499 actions, one skipped
+  online observation, zero policy errors and no decisions above 50 ms;
+  maximum computation was 31.29 ms. Captured runtime hashes matched.
+  No detour activated: 318 decisions rejected health/recent damage, 123 had
+  no current item, 48 were rotating/recovering and ten had no pursuit target.
+  Telemetry checks found no nearest-target, near/recovery, near/partial-reload
+  or quiet-recovery fire violations. This run does not exercise the corrected
+  incidental-growth path or demonstrate an official score improvement.
+
+For attribution, two earlier private matches used intermediate hash `2413d274`,
+not this corrected source. They ended fourth (zero kills, one cube) and second
+(two kills, four cubes). In the second, a laser detour actually completed at
+4.6 seconds and the same decision resumed nearest-enemy pursuit. The first
+aborted a cube detour and later collected an adjacent cube, not its leased
+item. These observations establish intermediate live behavior only; the
+corrected growth handling is covered by the final regressions above.
+
+The earlier 2,543-observation replay belongs to the 3 ms source, as recorded
+in RESOURCE_PURSUIT_PLAN.md and the work audit. Its observations establish
+reachable geometry and prior context, not final-source timing or collections.
 
 ## NPC farming range (historical, unsubmitted experiment)
 

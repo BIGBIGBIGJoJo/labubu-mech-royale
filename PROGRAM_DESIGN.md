@@ -6,7 +6,11 @@ when health is low and no enemy is nearby. The user explicitly selected equal
 treatment of enemy mechs and NPC drones, and current weapon reach as the meaning
 of nearby. The official target remains **6.0**; the best verified score is 4.75.
 
-This candidate starts from exact best source `39b6d50`. The first-magazine and
+The original pursuit candidate started at exact best source `39b6d50` and
+scored 4.21 as `919f826`. This authorized resource follow-up starts at that
+pursuit commit. The spacing experiment scored 4.08 and is excluded. The
+4.75 entry remains selected. RESOURCE_PURSUIT_PLAN.md documents the new
+bounded pickup interruption, and CACHE_PLAN.md the exact terrain optimization. The first-magazine and
 drop-memory experiments scored 4.58 and 4.63 and are not included. A later NPC
 farming experiment was not submitted; its optional search was starved of time
 in real opening replays. That experiment remains separate from this pursuit
@@ -21,8 +25,11 @@ a held weapon as nearby even while that weapon is empty or cooling down, so a
 reload does not make danger disappear.
 
 Prioritize urgent zone access, nearby combat, quiet low-health recovery,
-nearest-target pursuit, then resources and exploration. Resource goals must
-not replace a pursuit target; immediately reachable pickups can still be taken.
+nearest-target pursuit, then resources and exploration. A brief pickup detour
+may change the movement objective only after the current route, exposure, zone
+and fixed time limits pass. Keep the nearest enemy as the combat target, and
+resume fresh pursuit on completion or abort. Immediately reachable pickups
+can still be taken without a detour.
 Use the shared nearby-enemy signal to control recovery and optional reloads.
 See ORCHESTRATION_PLAN.md for the precise contract and regressions.
 

@@ -1,5 +1,11 @@
 # Fast nearest-enemy pursuit: movement plan
 
+Current revision note: RESOURCE_PURSUIT_PLAN.md adds the user-authorized,
+bounded pickup movement exception. Nearest combat targeting and the shared
+reload/healing rules below remain in effect. CACHE_PLAN.md describes the
+separate exact terrain optimization. The older no-detour rule below describes
+the original pursuit experiment and is superseded only by that bounded exception.
+
 This plan precedes implementation on exact retained-best baseline `39b6d50`. The user has now specified equal priority for mechs and NPCs, selection of the nearest living listed enemy, and “nearby” based on usable held-weapon reach. Movement consumes that selected target and the orchestrator's shared nearby predicate; it does not select another target or redefine nearby from its preferred engagement distance.
 
 The intended behavior is rapid routed approach into a useful close firing band, then tracking and strafing while combat uses the available weapons. Urgent zone movement, verified body collision constraints, incoming projectiles and aimed beams remain authoritative. Reload/recovery arbitration belongs to the orchestrator; a low-HP flag must not silently restore the old distant standoff while an enemy satisfies the user's nearby definition.

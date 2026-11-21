@@ -60,6 +60,10 @@ class Bot:
         self.resource_key = None
         self.target_id = None
         self.eliminated_mechs = set()
+        self.detour = None
+        self.detour_retry = {}
+        self.detour_resume_until = -1.0
+        self.detour_report = {"status": "none"}
 
     def stats(self, me):
         stats = {**self.config["mech"], **me.get("stats", {})}
@@ -326,7 +330,8 @@ class Bot:
             best = [center[0] + r * u[0], center[1] + r * u[1], self.map.ground_height(center[0] + r * u[0], center[1] + r * u[1])]
         return best
 
-    def resource_goal(self, obs, threats, deadline=None):
+    def resource_goal(self, obs, threats, deadline=None, *, current_items=None,
+                      pickup_only=False, limit=32, return_all=False, exposure_points=None, cube_counts=None):
         """Price completion time and exposure for each reachable opportunity."""
         me, t = obs["self"], obs["t"]
         p, stats = me["pos"], self.stats(me)
@@ -343,6 +348,8 @@ class Bot:
         def exposure(point, travel, dwell=0, farming=False):
             penalty = 0.0
             for q in mechs[:5]:
+                if pickup_only and deadline is not None and time.perf_counter() >= deadline:
+                    return None
                 actor = q["actor"]
                 end_d = distance(point, actor["pos"])
                 # A short pickup while already retreating need not abandon the escape.
@@ -383,7 +390,8 @@ class Bot:
                 return
             if abs(point[2] - self.map.ground_height(*point[:2])) > 3:
                 return
-            risk = exposure(point, travel, dwell, farming)
+            exposure_point = exposure_points.get(key, point) if exposure_points is not None else point
+            risk = exposure(exposure_point, distance(p, exposure_point), dwell, farming)
             if risk is None:
                 return
             if self.recover and travel > 30 and kind != "drop":
@@ -394,17 +402,19 @@ class Bot:
             if score > 0:
                 candidates.append((score, point, kind, key, item))
 
-        nearby = sorted(self.loot.items(), key=lambda pair: distance(p, pair[1][0]["pos"]))
-        for key, (item, seen) in nearby[:32]:
+        nearby = sorted(self.loot.items() if current_items is None else current_items,
+                        key=lambda pair: distance(p, pair[1][0]["pos"]))
+        for key, (item, seen) in nearby[:limit]:
             if deadline is not None and time.perf_counter() >= deadline:
                 break
             if key in self.blacklist:
                 continue
             kind = key[0]
             if kind == "cubes":
-                count = sum(distance(item["pos"], other[0]["pos"]) <= pickup_r
-                            and abs(item["pos"][2] - other[0]["pos"][2]) <= 4
-                            for k, other in nearby if k[0] == "cubes" and k not in self.blacklist)
+                count = (cube_counts[key] if cube_counts is not None else
+                         sum(distance(item["pos"], other[0]["pos"]) <= pickup_r
+                             and abs(item["pos"][2] - other[0]["pos"][2]) <= 4
+                             for k, other in nearby if k[0] == "cubes" and k not in self.blacklist))
                 useful = min(count, max(0, cap - me["cubes"]))
                 next_count = me["cubes"] + count
                 threshold = any(me["cubes"] < n <= next_count for n in self.config["cubes"]["upgrade_thresholds"])
@@ -424,6 +434,8 @@ class Bot:
                     benefit += 15
                 add(item, kind, key, benefit, seen)
             else:
+                if pickup_only:
+                    continue
                 if self.recover or me["hp"] < .8 * me["max_hp"] or me["cubes"] >= cap:
                     continue
                 if not self.map.line_of_fire(eye, [*item["pos"][:2], item["pos"][2] + self.config["crates"].get("height", 2.4) * .7]):
@@ -441,7 +453,7 @@ class Bot:
                 add(item, kind, key, benefit, seen, dwell, farming=True)
 
         # Isolated NPCs produce two cubes; do not start a farm inside a mech fight.
-        if not self.recover and me["hp"] >= .8 * me["max_hp"] and me["cubes"] < cap:
+        if not pickup_only and not self.recover and me["hp"] >= .8 * me["max_hp"] and me["cubes"] < cap:
             for q in threats:
                 if deadline is not None and time.perf_counter() >= deadline:
                     break
@@ -455,7 +467,7 @@ class Bot:
                     continue
                 add(actor, "npc", key, 87, dwell=actor.get("hp", 350) / 160, farming=True)
 
-        for drop in obs.get("drops", []):
+        for drop in (() if pickup_only else obs.get("drops", [])):
             if deadline is not None and time.perf_counter() >= deadline:
                 break
             key = ("drop", drop["id"])
@@ -512,7 +524,218 @@ class Bot:
                 score += 15
             if score > 0:
                 candidates.append((score, point, "drop", key, drop))
-        return max(candidates, default=None, key=lambda c: c[0])
+        return sorted(candidates, key=lambda c: c[0], reverse=True) if return_all else max(candidates, default=None, key=lambda c: c[0])
+
+    def end_detour(self, t, reason, completed=False):
+        old = self.detour
+        self.detour = None
+        self.detour_resume_until = t + 2.0
+        if old and not completed:
+            self.detour_retry[old["key"]] = t + 6.0
+        self.detour_report = {"status": "completed" if completed else "aborted", "reason": reason,
+                              "item": old["key"] if old else None}
+
+    def pursuit_resource(self, obs, threats, stats, target, pursuit_goal, urgent, deadline):
+        """A fixed, revalidated pickup lease; combat keeps its nearest target."""
+        me, t = obs["self"], obs["t"]
+        self.detour_retry = dict(sorted(((k, until) for k, until in self.detour_retry.items() if until > t),
+                                       key=lambda pair: pair[1], reverse=True)[:16])
+        started = time.perf_counter()
+        self.detour_report = {"status": "none"}
+        held = {w["kind"] for w in me["weapons"] if w}
+        old = self.detour
+        if old:
+            collected = (me["cubes"] > old["cubes"] if old["key"][0] == "cubes"
+                         else old["weapon"] in held)
+            if collected:
+                self.end_detour(t, "acquired", completed=True)
+                return None
+            if t >= old["expires"]:
+                self.end_detour(t, "expired")
+                return None
+            if target is None or target["id"] != old["target"]:
+                self.end_detour(t, "target_changed")
+                return None
+        reason = None
+        if target is None:
+            reason = "no_target"
+        elif urgent or self.recover:
+            reason = "rotate_or_recover"
+        elif me["hp"] < .55 * me["max_hp"] or t - self.last_weapon_hurt < 3:
+            reason = "health_or_recent_damage"
+        elif not me.get("grounded") or not self.map.available:
+            reason = "no_ground_route"
+        elif any(not q.get("los_known", True) for q in threats):
+            reason = "unverified_exposure"
+        elif not old and t < self.detour_resume_until:
+            reason = "pursuit_resume_window"
+        elif time.perf_counter() >= deadline:
+            reason = "budget"
+        if reason:
+            if old:
+                self.end_detour(t, reason)
+            else:
+                self.detour_report = {"status": "rejected", "reason": reason}
+            return None
+
+        # A laser may begin charging later in this very decision. Always price
+        # its held-loadout slowdown, rather than relying on last observed charge.
+        speed = max(.1, stats["walk_speed"] * (min(1, stats["charge_move_mult"]) if "laser" in held else 1))
+        p = me["pos"]
+        items, endpoints, cube_counts, pickup_counts = [], {}, {}, {}
+        def budget_abort():
+            if old:
+                self.end_detour(t, "budget")
+            else:
+                self.detour_report = {"status": "rejected", "reason": "budget"}
+
+        for category in ("cubes", "pickups"):
+            closest = None
+            for item in obs.get(category, []):
+                if time.perf_counter() >= deadline:
+                    budget_abort()
+                    return None
+                key = (category, item["id"])
+                if old and key != old["key"]:
+                    continue
+                if key in self.detour_retry or key in self.blacklist:
+                    continue
+                reach = self.config["cubes"]["pickup_radius"] if category == "cubes" else self.config["loot"]["pickup_radius"]
+                d = distance(p, item["pos"])
+                if (d <= reach and not old) or d > speed * 3 + reach:
+                    continue
+                if category == "pickups":
+                    if (len(held) != 1 or not any(w is None for w in me["weapons"])
+                            or item["kind"] in held or item["kind"] == "gun"):
+                        continue
+                if closest is None or d < closest[0]:
+                    closest = d, key, item
+            if closest is not None:
+                items.append((closest[1], (closest[2], t)))
+        if not items:
+            if old:
+                self.end_detour(t, "item_absent_or_not_useful")
+            else:
+                self.detour_report = {"status": "rejected", "reason": "no_current_item"}
+            return None
+        eligible = []
+        for key, (item, _) in items:
+            if time.perf_counter() >= deadline:
+                budget_abort()
+                return None
+            reach = self.config["cubes"]["pickup_radius"] if key[0] == "cubes" else self.config["loot"]["pickup_radius"]
+            vx, vy = unit(p[0] - item["pos"][0], p[1] - item["pos"][1])
+            # Ordinary navigation holds within 1.5m; leave another .5m of
+            # collection margin instead of stopping outside pickup reach.
+            inset = max(0, reach - 2.0)
+            endpoint = [item["pos"][0] + vx * inset, item["pos"][1] + vy * inset, 0]
+            endpoint[2] = self.map.ground_height(*endpoint[:2])
+            endpoints[key] = endpoint
+            collected = 0
+            for cube in obs.get("cubes", []):
+                if time.perf_counter() >= deadline:
+                    budget_abort()
+                    return None
+                collected += (distance(endpoint, cube["pos"]) <= self.config["cubes"]["pickup_radius"]
+                              and abs(endpoint[2] - cube["pos"][2]) <= 4)
+            cube_counts[key], pickup_counts[key] = collected, collected
+            if key[0] == "cubes" and me["cubes"] >= self.config["cubes"]["stat_cap"]:
+                if not any(me["cubes"] < n <= me["cubes"] + collected for n in self.config["cubes"]["upgrade_thresholds"]):
+                    continue
+            eligible.append((key, (item, t)))
+        candidates = self.resource_goal(obs, threats, deadline, current_items=eligible,
+                                         pickup_only=True, limit=2, return_all=True, exposure_points=endpoints,
+                                         cube_counts=cube_counts)
+        if not candidates:
+            if old:
+                self.end_detour(t, "item_or_exposure_invalid")
+            else:
+                self.detour_report = {"status": "rejected", "reason": "no_eligible_item"}
+            return None
+        ux, uy = unit(pursuit_goal[0] - p[0], pursuit_goal[1] - p[1])
+        reference = min(10.0, speed, distance(p, pursuit_goal))
+        if reference < 1:
+            if old:
+                self.end_detour(t, "no_reference_route")
+            return None
+        anchor = [p[0] + ux * reference, p[1] + uy * reference, 0]
+        anchor[2] = self.map.ground_height(*anchor[:2])
+        max_query_ms, queries = 0.0, 0
+        def checked(function, *args):
+            nonlocal max_query_ms, queries
+            before = time.perf_counter()
+            if before + .0005 >= deadline:
+                return False
+            value = function(*args)
+            queries += 1
+            max_query_ms = max(max_query_ms, (time.perf_counter() - before) * 1000)
+            return value
+        chosen = None
+        def segment_distance(point, a, b):
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            fraction = clamp(((point[0] - a[0]) * dx + (point[1] - a[1]) * dy)
+                             / max(1e-12, dx * dx + dy * dy), 0, 1)
+            return math.hypot(point[0] - a[0] - fraction * dx, point[1] - a[1] - fraction * dy)
+
+        for candidate in candidates:
+            item, category = candidate[4], candidate[2]
+            reach = self.config["cubes"]["pickup_radius"] if category == "cubes" else self.config["loot"]["pickup_radius"]
+            endpoint = endpoints[candidate[3]]
+            if abs(endpoint[2] - item["pos"][2]) > 4:
+                continue
+            return_distance = distance(endpoint, anchor)
+            return_seconds = return_distance / speed
+            if category == "pickups" and item["kind"] == "laser" and "laser" not in held:
+                equip = max(self.config["loot"]["equip_s"], self.config["weapons"]["laser"]["cooldown"])
+                free_distance = min(return_distance, speed * equip)
+                charge_speed = max(.1, speed * min(1, stats["charge_move_mult"]))
+                return_seconds = free_distance / speed + (return_distance - free_distance) / charge_speed
+            trip = distance(p, endpoint) / speed + return_seconds
+            extra = max(0, trip - reference / speed)
+            if trip > 3 or extra > 2 or (old and distance(p, endpoint) / speed > old["expires"] - t):
+                continue
+            collected = pickup_counts[candidate[3]]
+            growth = ((1 + self.config["cubes"]["size_per_cube"] * (me["cubes"] + collected))
+                      / (1 + self.config["cubes"]["size_per_cube"] * me["cubes"]))
+            return_radius, return_height = stats["radius"] * growth, stats["height"] * growth
+            future_center, future_radius = self.zone_future(obs, trip + 4)
+            if any(distance(point, future_center) + return_radius + 8 >= future_radius for point in (endpoint, anchor)):
+                continue
+            blocked = False
+            for q in threats:
+                actor = q["actor"]
+                envelope = (self.config["npc"]["aggro_range"] if actor["kind"] == "npc" else 40) + return_radius
+                closest = min(segment_distance(actor["pos"], p, endpoint), segment_distance(actor["pos"], endpoint, anchor))
+                if closest < envelope and (q["d"] >= envelope or closest < q["d"] - 1):
+                    blocked = True
+                    break
+            if blocked:
+                continue
+            if not (checked(self.map.point_clear, endpoint, return_radius, return_height)
+                    and checked(self.map.point_clear, anchor, return_radius, return_height)
+                    and checked(self.map.move_clear, p, anchor, stats["radius"], stats["height"])
+                    and checked(self.map.move_clear, p, endpoint, stats["radius"], stats["height"])
+                    and checked(self.map.move_clear, endpoint, anchor, return_radius, return_height)):
+                continue
+            if time.perf_counter() >= deadline:
+                break
+            chosen = candidate, endpoint, trip, extra
+            break
+        if chosen is None:
+            if old:
+                self.end_detour(t, "route_eta_or_budget")
+            else:
+                self.detour_report = {"status": "rejected", "reason": "route_eta_or_budget"}
+            return None
+        candidate, endpoint, trip, extra = chosen
+        if old is None:
+            self.detour = {"key": candidate[3], "target": target["id"], "expires": t + 3.0,
+                           "cubes": me["cubes"], "weapon": candidate[4].get("kind")}
+        self.detour_report = {"status": "active", "item": candidate[3], "expires": self.detour["expires"],
+                              "trip_s": trip, "extra_s": extra, "anchor": anchor,
+                              "queries": queries, "max_query_ms": max_query_ms,
+                              "ms": (time.perf_counter() - started) * 1000}
+        return candidate, endpoint
 
     def movement(self, obs, navigation, threats, s, urgent, deadline, goal=None, shot_energy=0.0):
         if time.perf_counter() >= deadline:
@@ -626,6 +849,12 @@ class Bot:
                 self.last_strafe = t
             dx, dy = unit(ux * radial - uy * tangent * self.strafe, uy * radial + ux * tangent * self.strafe)
             goal = [p[0] + dx * 20, p[1] + dy * 20, p[2]]
+        detour = self.pursuit_resource(obs, threats, s, pursuit_target, goal, urgent,
+                                       min(deadline - .017, time.perf_counter() + .006))
+        if detour is not None:
+            selected, goal = detour
+            self.resource_key, self.mode = selected[3], "detour"
+            self.pursuit_boost = False
         allow_fire = not self.recover
         # Keep distant/occluded pursuit separate from firing so a reported
         # actor cannot block an otherwise permitted quiet ammunition top-up.
@@ -683,6 +912,7 @@ class Bot:
                           "nearby_enemy": near, "near_target": nearby["actor"]["id"] if nearby else None,
                           "near_assessment_complete": near_complete,
                           "near_reason": near_reason, "visibility": self.last_threat_report,
+                          "detour": self.detour_report,
                           "fire_target": fire_target.get("id") if fire_target else None,
                           "allow_fire": allow_fire, "allow_partial_reload": not near,
                           "recovery_needed": self.recovery_needed, "pursuit_boost": self.pursuit_boost,

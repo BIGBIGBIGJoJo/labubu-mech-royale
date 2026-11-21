@@ -229,9 +229,9 @@ class PursuitOrchestrationTests(unittest.TestCase):
         self.assertTrue(action["reload"])
         self.assertFalse(self.bot.telemetry["allow_partial_reload"])
 
-    def test_resource_scoring_cannot_override_existing_pursuit(self):
+    def test_far_resource_scoring_cannot_override_existing_pursuit(self):
         self.obs["mechs"] = [self.enemy(300)]
-        self.obs["cubes"] = [{"id": 5001, "pos": [0, 20, 0]}]
+        self.obs["cubes"] = [{"id": 5001, "pos": [0, 80, 0]}]
         with patch.object(self.bot, "resource_goal", side_effect=AssertionError("pursuit must win")):
             action = self.bot.act(self.obs)
         self.assertGreater(action["move"][0], 0)

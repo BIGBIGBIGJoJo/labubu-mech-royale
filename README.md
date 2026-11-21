@@ -28,7 +28,9 @@ implementation plan, limits, and evaluation process.
 The current target is **6.0**. See [PROGRAM_DESIGN.md](PROGRAM_DESIGN.md) for the
 current nearest-enemy pursuit design. The implementation plans are
 [MOVEMENT_PLAN.md](MOVEMENT_PLAN.md), [FIRE_PLAN.md](FIRE_PLAN.md) and
-[ORCHESTRATION_PLAN.md](ORCHESTRATION_PLAN.md). Mechs and NPCs receive equal
+[ORCHESTRATION_PLAN.md](ORCHESTRATION_PLAN.md). The authorized pickup
+exception is specified in [RESOURCE_PURSUIT_PLAN.md](RESOURCE_PURSUIT_PLAN.md);
+the exact geometry optimization is in [CACHE_PLAN.md](CACHE_PLAN.md). Mechs and NPCs receive equal
 target priority; nearby enemies prevent quiet healing and optional partial reloads.
 [STRATEGY_V2.md](STRATEGY_V2.md) is a historical design document; its earlier 6.3
 target is superseded. [VALIDATION.md](VALIDATION.md) preserves every official result.
