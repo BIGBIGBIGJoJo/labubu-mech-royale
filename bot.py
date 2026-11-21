@@ -42,6 +42,7 @@ class Bot:
         self.last_weapon_hurt = -100.0
         self.last_combat = -100.0
         self.damage_bearing = None
+        self.damage_bearing_t = -100.0
         self.last_jump = -100.0
         self.history = deque()
         self.loot = {}
@@ -98,6 +99,7 @@ class Bot:
                         self.recent_attackers[event["by"]] = t
                 if event.get("bearing") is not None:
                     self.damage_bearing = event["bearing"]
+                    self.damage_bearing_t = t
             if event["type"] in ("took", "take_failed"):
                 self.loot.pop(("pickups", event.get("id")), None)
         self.history.append((t, tuple(me["pos"]), math.hypot(*self.last_move)))
@@ -626,7 +628,7 @@ class Bot:
             # Turn toward received fire, otherwise scan instead of staring at the destination.
             if t - self.last_hurt < 3 and self.damage_bearing is not None:
                 combat["aim"] = [self.damage_bearing, me["aim"][1]]
-                recent_damage_yaw = self.damage_bearing
+                recent_damage_yaw = self.damage_bearing if t - self.damage_bearing_t < 3 else None
             elif threats:
                 enemy = max(threats, key=lambda q: q["risk"])["actor"]
                 combat["aim"] = [math.atan2(enemy["pos"][1] - p[1], enemy["pos"][0] - p[0]), 0]

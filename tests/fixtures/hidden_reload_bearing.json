@@ -599,6 +599,7 @@
   },
   "initial_last_hurt": 54.2,
   "initial_damage_bearing": -0.203,
+  "initial_damage_bearing_t": 54.2,
   "frames": [
     {
       "obs": {

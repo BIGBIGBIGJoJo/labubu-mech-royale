@@ -1,5 +1,8 @@
 # Preserve recent damage-facing during an unseen-attacker reload
 
+This report describes parent commit `ffc08c7b3845beb2afa9c550ef910ff74e85f1e0`.
+The subsequent timestamp guard is documented in `BEARING_FRESHNESS_VALIDATION.md`.
+
 Isolated base: `39b6d509af8e82b0ceb9e1c430dd964674d7488e`.
 No spacing, native terrain, scheduling, navigation or other candidate is combined.
 

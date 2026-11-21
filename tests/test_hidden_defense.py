@@ -52,6 +52,7 @@ class HiddenDefenseTests(unittest.TestCase):
         with patch.object(policy,'ArenaMap',FlatArena):bot=policy.Bot(data['hello'])
         bot.last_hurt=bot.last_weapon_hurt=data['initial_last_hurt']
         bot.damage_bearing=data['initial_damage_bearing']
+        bot.damage_bearing_t=data['initial_damage_bearing_t']
         bot.recent_attackers[6]=data['initial_last_hurt']
         self.assertEqual(len(data['frames']),21)
         for frame in data['frames']:
@@ -117,6 +118,24 @@ class HiddenDefenseTests(unittest.TestCase):
         with patch.object(self.bot,'defensive_yaw',wraps=self.bot.defensive_yaw) as optimizer:
             self.assertEqual(self.bot.act(self.obs)['aim'][0],-.7)
             optimizer.assert_not_called()
+
+    def test_null_bearing_damage_does_not_refresh_reload_fallback(self):
+        data=json.loads((ROOT/'tests/fixtures/damage_bearing_freshness.json').read_text())
+        for case in data['cases']:
+            with self.subTest(case=case['name']):
+                with patch.object(policy,'ArenaMap',FlatArena):bot=policy.Bot(copy.deepcopy(self.hello))
+                earlier=copy.deepcopy(self.obs)
+                earlier.update(t=case['bearing_t'],tick=round(case['bearing_t']*20))
+                earlier['events']=[{'type':'damaged','weapon':'gun','amount':45,'bearing':-.7,'by':6}]
+                bot.update(earlier)
+                current=copy.deepcopy(self.obs)
+                current['t']=data['current_t']
+                current['self']['aim'][0]=data['actual_yaw']
+                current['events']=[case['event']]
+                action=bot.act(current)
+                self.assertEqual(bot.last_hurt,current['t'])
+                self.assertEqual(bot.damage_bearing_t,case['bearing_t'])
+                self.assertEqual(action['aim'][0],case['expected_yaw'])
 
 
 if __name__=='__main__':unittest.main()

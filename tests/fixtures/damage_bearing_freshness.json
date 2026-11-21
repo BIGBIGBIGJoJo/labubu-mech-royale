@@ -1,0 +1,31 @@
+{
+  "kind": "Protocol-valid synthetic boundary fixtures, not recorded gameplay",
+  "current_t": 20.0,
+  "actual_yaw": 1.2,
+  "cases": [
+    {
+      "name": "zone_does_not_revive_four_second_old_bearing",
+      "bearing_t": 16.0,
+      "event": {"type": "damaged", "weapon": "zone", "amount": 5, "bearing": null, "by": null},
+      "expected_yaw": 1.2
+    },
+    {
+      "name": "three_second_boundary_is_stale_despite_zone_damage",
+      "bearing_t": 17.0,
+      "event": {"type": "damaged", "weapon": "zone", "amount": 5, "bearing": null, "by": null},
+      "expected_yaw": 1.2
+    },
+    {
+      "name": "fresh_nonnull_bearing_survives_later_zone_damage",
+      "bearing_t": 18.0,
+      "event": {"type": "damaged", "weapon": "zone", "amount": 5, "bearing": null, "by": null},
+      "expected_yaw": -0.7
+    },
+    {
+      "name": "nullable_nonzone_event_cannot_refresh_old_bearing",
+      "bearing_t": 16.0,
+      "event": {"type": "damaged", "weapon": "gun", "amount": 45, "bearing": null, "by": 6},
+      "expected_yaw": 1.2
+    }
+  ]
+}
