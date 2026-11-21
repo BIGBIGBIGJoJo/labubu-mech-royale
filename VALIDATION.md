@@ -27,6 +27,42 @@ Source: authenticated team's submission panel on the
 The team page automatically enters its best accepted score unless another
 submission is explicitly selected. No tournament placement is guaranteed.
 
+## Selective-v4 permission candidate
+
+The [follow-up plan](SELECTIVE_V4_PLAN.md) separates fresh fight evidence from a
+fixed finish deadline and permits bounded continuation against confirmed current
+attackers. Quiet actors remain protected. The reviewed implementation adds
+physical first-body reachability checks and one consistent authorization set for
+predicted damage and final weapon guards.
+
+- 326 tests pass, including 44 new policy cases and six root-controller cases.
+- Restricted Docker checker: 300/300 timely replies, zero invalid lines or wrong
+  ticks, p99 18.0 ms, maximum 28.8 ms, ready in 1,484 ms. One older queued
+  observation was discarded; the checker passed.
+- Host stress: 580 schema-valid decisions, maximum 38.00 ms, none over 50 ms.
+  All 40 added continued-attacker cases selected the intended bounded defensive
+  reason. The generic dense beam-fight fixture crosses our body and therefore
+  exercises defense, not elective FINISH; dedicated tests cover finish behavior.
+
+These are local checks, not an official score or proof of improved placement.
+
+The complete bot, real arena geometry, and unmodified FinishSafety also accepted
+the recorded opportunity: entry at 51.7 seconds on target 8, continuation at
+52.0, with the original fixed deadline 53.7. Both observations retained their
+real incoming gun projectile. All 20 repeated three-frame trials agreed; maximum
+decision time was 31.89 ms. A 521-observation prefix replay reached the same
+decisions and stayed below 50 ms (maximum 32.56 ms). This verifies decisions on
+recorded observations, not a counterfactual kill or survival outcome.
+
+The frozen private diagnostic finished 1st with three kills and 43 cubes at
+170.5 seconds. It dealt 3,826 damage, took 2,598, and took no zone damage.
+All 1,695 actions computed below 50 ms (maximum 32.15 ms), with zero policy
+errors. Eleven observations were skipped by the online interface. All 171
+mech-trigger commands had explicit permission; the first occurred at 79.4
+seconds against a recently attributed attacker. No elective FINISH was selected.
+These are uncontrolled FFA results; house opponents in official practice do not
+eliminate each other, so the placement is not an official score estimate.
+
 ## Selective-v3 energy candidate
 
 The separate [energy experiment](BOOST_PLAN.md) adds observed-energy boost

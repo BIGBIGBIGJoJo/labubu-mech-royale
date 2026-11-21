@@ -53,6 +53,100 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(action["fire"], [False, False])
         self.assertIsNone(self.bot.telemetry["target"])
 
+    def enter_finish(self, evidence_age=.1):
+        self.obs["self"]["weapons"] = [self.weapon("gun"), self.weapon("laser")]
+        self.obs["mechs"] = [self.enemy(100, id=5, hp=150)]
+        self.obs["beams"] = [{"by":9,"kind":"lightning","age":evidence_age,
+                               "path":[[130,10,7],[100,0,4.5]]}]
+        action = self.act_with_safety([5])
+        self.assertEqual(self.bot.state, "FINISH")
+        return action
+
+    def advance_frame(self, seconds):
+        self.obs["t"] += seconds
+        self.obs["tick"] = round(self.obs["t"] * 20)
+        self.obs["beams"] = []
+        self.obs["events"] = []
+
+    def test_bot_explicitly_enables_reviewed_engagement_policy(self):
+        self.assertIsNotNone(self.bot.engagement.experimental)
+        self.assertTrue(self.bot.engagement.experimental.finish_commitment)
+
+    def test_fresh_attackers_share_defensive_lightning_permission(self):
+        self.obs["self"]["weapons"] = [self.weapon("gun"), self.weapon("lightning")]
+        self.obs["mechs"] = [self.enemy(30,id=5,hp=500), self.enemy(40,id=6,hp=1000)]
+        self.obs["events"] = [{"type":"damaged","by":actor_id,"weapon":"gun",
+                                "amount":45,"bearing":0} for actor_id in (5,6)]
+        action = self.act_with_safety()
+        self.assertEqual(self.bot.state, "DEFEND")
+        self.assertEqual(self.bot.telemetry["target"], 5)
+        self.assertEqual(self.bot.telemetry["engagement"]["authorized_ids"], [5,6])
+        self.assertTrue(action["fire"][1],
+                        "Both chain recipients independently attacked us")
+
+    def test_quiet_third_mech_stays_protected_among_fresh_attackers(self):
+        self.obs["self"]["weapons"] = [self.weapon("gun"), self.weapon("lightning")]
+        self.obs["mechs"] = [self.enemy(30,id=5,hp=500), self.enemy(40,id=6,hp=1000),
+                              self.enemy(50,id=7,hp=20)]
+        self.obs["events"] = [{"type":"damaged","by":actor_id,"weapon":"gun",
+                                "amount":45,"bearing":0} for actor_id in (5,6)]
+        action = self.act_with_safety()
+        self.assertEqual(self.bot.telemetry["target"], 5)
+        self.assertEqual(self.bot.telemetry["engagement"]["authorized_ids"], [5,6])
+        self.assertFalse(action["fire"][1], "The third chain recipient has no permission")
+        self.assertTrue(action["fire"][0], "Direct defense against the first attacker remains valid")
+
+    def test_finish_deadline_persists_across_bot_actions(self):
+        self.enter_finish(evidence_age=1.7)
+        entry = dict(self.bot.telemetry["engagement"])
+        self.assertAlmostEqual(entry["finish_deadline"], 22)
+        self.assertAlmostEqual(entry["entry_evidence_at"], 18.3)
+        self.advance_frame(.4)
+        self.obs["self"]["weapons"][1]["charge"] = .3
+        self.obs["mechs"][0]["hp"] = 140
+        self.obs["events"] = [{"type":"hit","target":5,"weapon":"gun","amount":10}]
+        self.act_with_safety([5])
+        later = self.bot.telemetry["engagement"]
+        self.assertEqual(self.bot.state, "FINISH")
+        self.assertEqual(self.bot.telemetry["target"], 5)
+        self.assertAlmostEqual(later["finish_deadline"], entry["finish_deadline"])
+        self.assertAlmostEqual(later["entry_evidence_at"], entry["entry_evidence_at"])
+        self.assertEqual(later["authorized_ids"], [5])
+
+    def test_recovery_aborts_finish_and_preserves_held_laser_aim(self):
+        self.enter_finish()
+        self.advance_frame(.2)
+        self.obs["self"].update(hp=500,aim=[.2,.1])
+        self.obs["self"]["weapons"][1]["charge"] = .3
+        self.obs["mechs"].append(self.enemy(0,50,id=6))
+        action = self.act_with_safety([5])
+        self.assertEqual(self.bot.state, "RECOVER")
+        self.assert_no_enemy_fire(action)
+        self.assertIsNone(self.bot.telemetry["engagement"]["finish_deadline"])
+        self.assertEqual(action["aim"], self.obs["self"]["aim"])
+
+    def test_urgent_rotation_aborts_finish_and_consumes_entry_evidence(self):
+        self.enter_finish()
+        zone = copy.deepcopy(self.obs["zone"])
+        self.advance_frame(.2)
+        self.obs["self"].update(in_zone=False,aim=[.2,.1])
+        self.obs["self"]["weapons"][1]["charge"] = .3
+        self.obs["zone"].update(center=[100,0],radius=60,next_center=[100,0],next_radius=50)
+        def safety_contract(*args, **kwargs):
+            self.assertTrue(kwargs["urgent"])
+            return self.assessment()
+        with patch.object(self.bot.finish_safety,"evaluate",side_effect=safety_contract):
+            action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.state, "ROTATE")
+        self.assert_no_enemy_fire(action)
+        self.assertEqual(action["aim"], self.obs["self"]["aim"])
+        self.assertIsNone(self.bot.telemetry["engagement"]["finish_deadline"])
+        self.advance_frame(.1)
+        self.obs["self"]["in_zone"] = True
+        self.obs["self"]["weapons"][1]["charge"] = 0
+        self.obs["zone"] = zone
+        self.assert_no_enemy_fire(self.act_with_safety([5]))
+
     def test_quiet_close_weak_mech_never_receives_first_shot(self):
         self.obs["mechs"] = [self.enemy(8, hp=20)]
         action = self.act_with_safety([5])

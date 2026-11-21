@@ -8,7 +8,7 @@ from collections import deque
 import mechfight as mf
 from arena_map import ArenaMap
 from combat import Combat
-from engagement import Engagement
+from engagement import Engagement, ExperimentalPolicy
 from positioning import FinishSafety
 from tactical import TacticalPlanner
 
@@ -33,7 +33,8 @@ class Bot:
         self.config = hello["config"]
         self.map = ArenaMap(hello["map"]["dir"], self.config)
         self.combat = Combat(self.config, self.map.line_of_fire)
-        self.engagement = Engagement(self.config, self.map.line_of_fire)
+        self.engagement = Engagement(self.config, self.map.line_of_fire,
+                                     experimental_policy=ExperimentalPolicy(finish_commitment=True))
         self.finish_safety = FinishSafety(self.config, self.map)
         self.tactical = TacticalPlanner(self.config, self.map)
         self.slot = hello["slot"]
@@ -746,8 +747,7 @@ class Bot:
             allow_fire = defending_npc or farming
             fire_reason = "attributed_npc_attack" if defending_npc else "safe_farming" if farming else "quiet_recovery"
         self.target_id = target.get("id") if target else None
-        protected_ids = {a["id"] for a in obs.get("mechs", []) if a.get("kind") == "mech"
-                         and (target is None or a["id"] != target.get("id") or not allow_fire)}
+        protected_ids = {a["id"] for a in obs.get("mechs", []) if a.get("kind") == "mech"} - decision.authorized_ids
         quiet_reload = True
         for q in threats:
             if not q["los"]:
@@ -828,7 +828,10 @@ class Bot:
                           "quiet_reload": quiet_reload,
                           "engagement": {"mode": decision.mode, "confidence": decision.confidence,
                                          "evidence_age": decision.evidence_age, "finish_eta": decision.finish_eta,
-                                         "budget_s": decision.finish_budget_s, "exclusions": decision.exclusions},
+                                         "budget_s": decision.finish_budget_s, "exclusions": decision.exclusions,
+                                         "authorized_ids": sorted(decision.authorized_ids),
+                                         "finish_deadline": decision.finish_deadline,
+                                         "entry_evidence_at": decision.entry_evidence_at},
                           "finish_safety": safety.reasons,
                           "route_status": getattr(self.map, "last_route_status", None),
                           "escape_anchor": getattr(safety, "escape_anchor", None),

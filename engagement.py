@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from combat import Combat, angle_delta
+from combat import Combat, angle_delta, direction
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,40 @@ class Decision:
     finish_eta: float | None = None
     finish_budget_s: float = 0.0
     exclusions: tuple = ()
+    authorized_ids: frozenset = frozenset()
+
+    @property
+    def finish_deadline(self):
+        return None
+
+    @property
+    def entry_evidence_at(self):
+        return None
+
+
+@dataclass(frozen=True)
+class CommittedDecision(Decision):
+    finish_deadline: float | None = None
+    entry_evidence_at: float | None = None
+
+
+@dataclass(frozen=True)
+class ExperimentalPolicy:
+    """Explicit opt-in; this prototype is never selected by default."""
+    continuation_seconds: float = 8.0
+    facing_radians: float = 0.25
+    approach_mps: float = 1.5
+    fresh_attacker_collateral: bool = True
+    direct_reachability: bool = True
+    finish_commitment: bool = False
+
+    def __post_init__(self):
+        if not (math.isfinite(self.continuation_seconds) and 3 <= self.continuation_seconds <= 8):
+            raise ValueError("continuation must be between three and eight seconds")
+        if not (math.isfinite(self.facing_radians) and 0 <= self.facing_radians <= math.pi):
+            raise ValueError("invalid facing threshold")
+        if not (math.isfinite(self.approach_mps) and self.approach_mps >= 0):
+            raise ValueError("invalid approach threshold")
 
 
 @dataclass(frozen=True)
@@ -30,6 +64,16 @@ class Evidence:
     at: float
     kind: str
     peer: int | None = None
+    source: int | None = None
+
+
+@dataclass(frozen=True)
+class FinishCommitment:
+    target_id: int
+    deadline: float
+    evidence: Evidence
+    hp: float
+    used_evidence: tuple
 
 
 class Engagement:
@@ -39,13 +83,17 @@ class Engagement:
     MAX_FINISH_BUDGET = 2.0
     FINISH_MARGIN = 0.1
 
-    def __init__(self, config, line_of_fire=None):
+    def __init__(self, config, line_of_fire=None, experimental_policy=None):
         self.config = config
         self.model = Combat(config, line_of_fire)
         self.attackers = {}
         self.participants = {}
         self._last_frame = None
         self._last_time = -1.0
+        self.experimental = experimental_policy
+        self.finish_commitment = None
+        self.consumed_evidence = {}
+        self.consumed_beams = {}
 
     @staticmethod
     def _known_hp(actor):
@@ -92,6 +140,9 @@ class Engagement:
         if now < self._last_time:
             self.attackers.clear()
             self.participants.clear()
+            self.finish_commitment = None
+            self.consumed_evidence.clear()
+            self.consumed_beams.clear()
         self._last_frame, self._last_time = frame, now
         me = obs["self"]
         own_id = me["id"]
@@ -124,10 +175,11 @@ class Engagement:
                 if actor["id"] == by:
                     continue
                 if any(self._body_intersection(a, b, actor, age) for a, b in segments):
-                    self._remember(self.participants, actor["id"], Evidence(when, "attributed_beam", by))
-                    self._remember(self.participants, by, Evidence(when, "attributed_beam", actor["id"]))
+                    self._remember(self.participants, actor["id"], Evidence(when, "attributed_beam", by, by))
+                    self._remember(self.participants, by, Evidence(when, "attributed_beam", actor["id"], by))
+        retention = self.experimental.continuation_seconds if self.experimental else self.DEFENSE_MEMORY
         self.attackers = {key: value for key, value in self.attackers.items()
-                          if key not in killed and now - value.at < self.DEFENSE_MEMORY}
+                          if key not in killed and now - value.at < retention}
         self.participants = {key: value for key, value in self.participants.items()
                              if key not in killed and now - value.at < self.FIGHT_MEMORY}
 
@@ -178,9 +230,63 @@ class Engagement:
                 return False
         return True
 
-    def _collateral_clear(self, obs, actor, kind, stats, when, own, sol):
+    def _fresh_authorized(self, obs, recovering):
+        if not self.experimental or not self.experimental.fresh_attacker_collateral:
+            return frozenset()
+        window = self.DEFENSE_MEMORY
+        if recovering:
+            window = min(window, max(0.0, self.model._self_stats(obs["self"]).get("regen_delay", 5)))
+        return frozenset(a["id"] for a in obs.get("mechs", ())
+                         if a.get("kind") == "mech" and a.get("hp", 1) > 0
+                         and a["id"] in self.attackers
+                         and obs["t"] - self.attackers[a["id"]].at < window)
+
+    def _continues_toward_us(self, obs, actor):
+        """Weak corroboration only; it cannot create or refresh attribution."""
+        policy = self.experimental
+        if policy is None:
+            return False
+        dx = obs["self"]["pos"][0] - actor["pos"][0]
+        dy = obs["self"]["pos"][1] - actor["pos"][1]
+        distance = math.hypot(dx, dy)
+        facing = abs(angle_delta(actor.get("aim", (0, 0))[0], math.atan2(dy, dx))) <= policy.facing_radians + 1e-9
+        velocity = actor.get("vel", (0, 0, 0))
+        # Enemy motion toward us, not relative closing caused by our own chase.
+        approach = (velocity[0] * dx + velocity[1] * dy) / max(1e-8, distance)
+        return facing or approach > policy.approach_mps
+
+    def _direct_reachable(self, obs, actor, kind, stats, when, sol):
+        """Permission to hit an interceptor does not make a farther shot hit.
+
+        Gun and non-piercing laser estimates require the selected actor to be
+        the first observed body. A laser can cross only its configured number
+        of earlier bodies. Quiet-body permission is checked separately.
+        """
+        if not self.experimental or not self.experimental.direct_reachability or kind not in ("gun", "laser"):
+            return True
+        moving = kind == "gun"
+        speed = stats.get("speed", 252) if moving else 1.0
+        velocity = [v * speed for v in direction(sol["aim"])]
+        duration = stats.get("range", 230 if moving else 280) / max(speed, 1e-8)
+        padding = self.config.get("projectile", {}).get("gun_radius", 0.3) if moving else 0.0
+        selected_hit = self.model._body_hit_time(sol["origin"], velocity, 0, duration, actor, when, padding, moving)
+        if selected_hit is None:
+            return False
+        budget = max(0, int(stats.get("pierce", 0))) if kind == "laser" else 0
+        entities = list(obs.get("mechs", ())) + [{**crate, "kind": "crate"} for crate in obs.get("crates", ())]
+        for other in entities:
+            if other.get("id") == actor["id"] or other.get("hp", 1) <= 0:
+                continue
+            hit = self.model._body_hit_time(sol["origin"], velocity, 0, selected_hit, other, when, padding, moving)
+            if hit is not None and hit < selected_hit - 1e-6:
+                budget -= 1
+                if budget < 0:
+                    return False
+        return True
+
+    def _collateral_clear(self, obs, actor, kind, stats, when, own, sol, authorized_ids=frozenset()):
         protected = {a["id"] for a in obs.get("mechs", ())
-                     if a.get("kind") == "mech" and a["id"] != actor["id"]}
+                     if a.get("kind") == "mech" and a["id"] != actor["id"] and a["id"] not in authorized_ids}
         me = obs["self"]
         if kind == "mortar":
             muzzle = sol["base_origin"]
@@ -192,7 +298,7 @@ class Engagement:
                       me["pos"][2] + own["muzzle_height"]]
         return self.model.collateral_clear(obs, actor, kind, stats, muzzle, sol["aim"], when, sol, protected)
 
-    def _weapon_profile(self, obs, actor, remaining_defense=None):
+    def _weapon_profile(self, obs, actor, remaining_defense=None, authorized_ids=frozenset()):
         """Usable wait and conditional single-weapon TTK; never sum shared aim."""
         me = obs["self"]
         own = self.model._self_stats(me)
@@ -235,7 +341,9 @@ class Engagement:
             sol = self._solution(me, actor, kind, stats, first, own)
             if not sol or not sol["clear"]:
                 continue
-            if not self._collateral_clear(obs, actor, kind, stats, first, own, sol):
+            if not self._direct_reachable(obs, actor, kind, stats, first, sol):
+                continue
+            if not self._collateral_clear(obs, actor, kind, stats, first, own, sol, authorized_ids):
                 continue
             first = self._round_time(max(first, self._aim_delay(me, sol["aim"], own)))
             if first > self.DEFENSE_MEMORY:
@@ -286,9 +394,109 @@ class Engagement:
             # Target motion cannot grant a shot that leaves our current range
             # or goes behind cover before the modeled finishing attack.
             final = self._solution(me, actor, kind, stats, finish, own)
-            if final and final["clear"] and self._collateral_clear(obs, actor, kind, stats, finish, own, final):
+            if (final and final["clear"] and self._direct_reachable(obs, actor, kind, stats, finish, final)
+                    and self._collateral_clear(obs, actor, kind, stats, finish, own, final, authorized_ids)):
                 finishes.append(finish)
         return (min(waits) if waits else None, min(finishes) if finishes else None)
+
+    def _cancel_finish_commitment(self):
+        commitment = self.finish_commitment
+        if commitment is None:
+            return
+        for actor_id, used in commitment.used_evidence:
+            # Consume any newer proof already observed for the same selected
+            # participants too; a repeated observation cannot restart a lease.
+            current = self.participants.get(actor_id)
+            for evidence in (used, current):
+                if evidence is None:
+                    continue
+                self.consumed_evidence[actor_id] = max(evidence.at, self.consumed_evidence.get(actor_id, -math.inf))
+                if evidence.source is not None:
+                    # The other participant of this same beam cannot borrow it
+                    # to start another commitment after cancellation/expiry.
+                    self.consumed_beams[evidence.source] = max(evidence.at, self.consumed_beams.get(evidence.source, -math.inf))
+        self.finish_commitment = None
+
+    def _select_finish_commitment(self, obs, usable, safe_finish, budget, fresh_authorized, profiles, exclusions):
+        """Entry needs fresh proof; completion has its own fixed safety budget."""
+        now = float(obs["t"])
+        commitment = self.finish_commitment
+        deadline = commitment.deadline if commitment else now + budget
+        effective = max(0.0, min(budget, deadline - now) - self.FINISH_MARGIN)
+        by_id = {actor["id"]: actor for actor in usable}
+
+        def observe(reason):
+            return Decision("OBSERVE", None, False, reason, finish_budget_s=effective,
+                            exclusions=tuple(exclusions), authorized_ids=fresh_authorized)
+
+        def eligibility(actor):
+            maximum = actor.get("max_hp")
+            if (not self._known_hp(actor) or not isinstance(maximum, (int, float))
+                    or not math.isfinite(maximum) or actor["hp"] >= maximum):
+                return None, "not_observably_weakened"
+            permitted = bool(safe_finish(actor)) if callable(safe_finish) else bool(safe_finish)
+            if not permitted:
+                return None, "unsafe_finish"
+            profile = profiles.get(actor["id"])
+            if profile is None:
+                profile = profiles[actor["id"]] = self._weapon_profile(obs, actor, authorized_ids=fresh_authorized)
+            eta = profile[1]
+            if eta is None or eta > effective:
+                return None, "finish_exceeds_remaining_budget"
+            return eta, None
+
+        choices = []
+        if commitment is not None:
+            current = by_id.get(commitment.target_id)
+            if effective <= 0:
+                reason = "finish_deadline_exhausted"
+            elif current is None:
+                reason = "committed_target_not_current_or_visible"
+            elif not self._known_hp(current) or current["hp"] > commitment.hp + 1e-6:
+                reason = "committed_target_health_increased_or_unknown"
+            else:
+                eta, reason = eligibility(current)
+                if reason is None:
+                    choices.append((current["hp"], eta, current["id"], current, commitment.evidence))
+            if reason is not None:
+                exclusions.append((commitment.target_id, reason))
+                self._cancel_finish_commitment()
+                # A canceled current target cannot be exchanged for a fresh
+                # exposure window in the same decision.
+                return observe(reason)
+        elif effective <= 0:
+            return observe("finish_budget_unavailable")
+
+        for actor in usable:
+            if commitment is not None and actor["id"] == commitment.target_id:
+                continue
+            if choices and self._known_hp(actor) and actor["hp"] > min(choice[0] for choice in choices):
+                break
+            evidence = self.participants.get(actor["id"])
+            if evidence is None or now - evidence.at >= self.FIGHT_MEMORY:
+                exclusions.append((actor["id"], "no_fresh_external_fight"))
+                continue
+            consumed = max(self.consumed_evidence.get(actor["id"], -math.inf),
+                           self.consumed_beams.get(evidence.source, -math.inf))
+            if evidence.at <= consumed + 1e-8:
+                exclusions.append((actor["id"], "consumed_fight_evidence"))
+                continue
+            eta, reason = eligibility(actor)
+            if reason is not None:
+                exclusions.append((actor["id"], reason))
+                continue
+            choices.append((actor["hp"], eta, actor["id"], actor, evidence))
+        if not choices:
+            return observe("no_authorized_mech_target")
+        _, eta, _, actor, evidence = min(choices, key=lambda choice: choice[:3])
+        used = dict(commitment.used_evidence) if commitment else {}
+        if actor["id"] not in used or evidence.at > used[actor["id"]].at:
+            used[actor["id"]] = evidence
+        self.finish_commitment = FinishCommitment(actor["id"], deadline, evidence, actor["hp"], tuple(sorted(used.items())))
+        reason = "continue_fixed_finish" if commitment else "enter_fixed_finish"
+        return CommittedDecision("FINISH", actor, True, reason, evidence.kind,
+                                 max(0.0, now - evidence.at), eta, effective, tuple(exclusions),
+                                 fresh_authorized | {actor["id"]}, deadline, evidence.at)
 
     def select(self, obs, candidates, *, safe_finish=False, finish_budget_s=2.0, recovering=False):
         self.update(obs)
@@ -313,6 +521,7 @@ class Engagement:
         defense_window = self.DEFENSE_MEMORY
         if recovering:
             defense_window = min(defense_window, max(0.0, self.model._self_stats(obs["self"]).get("regen_delay", 5.0)))
+        fresh_authorized = self._fresh_authorized(obs, recovering)
         for actor in usable:
             hp_key = actor.get("hp") if self._known_hp(actor) else float("inf")
             if defensive and hp_key > defensive[0][0]:
@@ -321,21 +530,34 @@ class Engagement:
             if evidence is None:
                 continue
             age = max(0.0, now - evidence.at)
-            if defense_window - age <= self.model.sim_dt:
+            window = defense_window
+            if (not recovering and self.experimental and self._continues_toward_us(obs, actor)):
+                # Visibility was required above. No weak signal changes at.
+                window = self.experimental.continuation_seconds
+            if window - age <= self.model.sim_dt:
                 exclusions.append((actor["id"], "defense_window_ending"))
                 continue
-            profile = profiles[actor["id"]] = self._weapon_profile(obs, actor, defense_window - age)
-            if profile[0] is None or profile[0] >= defense_window - age:
+            profile = profiles[actor["id"]] = self._weapon_profile(obs, actor, window - age, fresh_authorized)
+            if profile[0] is None or profile[0] >= window - age:
                 exclusions.append((actor["id"], "no_ready_defensive_weapon"))
                 continue
             defensive.append((actor.get("hp") if self._known_hp(actor) else float("inf"),
                               profile[1] if profile[1] is not None else float("inf"), actor["id"], actor, evidence))
         if defensive:
             _, _, _, actor, evidence = min(defensive, key=lambda row: row[:3])
-            return Decision("DEFEND", actor, True, "recent_attributed_attack", evidence.kind,
-                            max(0.0, now - evidence.at), profiles[actor["id"]][1], budget, tuple(exclusions))
+            age = max(0.0, now - evidence.at)
+            reason = "continuing_attributed_attack" if age >= self.DEFENSE_MEMORY else "recent_attributed_attack"
+            self._cancel_finish_commitment()
+            return Decision("DEFEND", actor, True, reason, evidence.kind,
+                            age, profiles[actor["id"]][1], budget, tuple(exclusions),
+                            fresh_authorized | {actor["id"]})
         if recovering:
-            return Decision("OBSERVE", None, False, "quiet_recovery", exclusions=tuple(exclusions))
+            self._cancel_finish_commitment()
+            return Decision("OBSERVE", None, False, "quiet_recovery", exclusions=tuple(exclusions),
+                            authorized_ids=fresh_authorized)
+        if self.experimental and self.experimental.finish_commitment:
+            return self._select_finish_commitment(obs, usable, safe_finish, budget,
+                                                  fresh_authorized, profiles, exclusions)
         finishes = []
         for actor in usable:
             if finishes and self._known_hp(actor) and actor["hp"] > finishes[0][0]:
@@ -357,7 +579,7 @@ class Engagement:
                 continue
             profile = profiles.get(actor["id"])
             if profile is None:
-                profile = profiles[actor["id"]] = self._weapon_profile(obs, actor)
+                profile = profiles[actor["id"]] = self._weapon_profile(obs, actor, authorized_ids=fresh_authorized)
             eta = profile[1]
             if eta is None or eta > effective:
                 exclusions.append((actor["id"], "finish_exceeds_budget"))
@@ -366,6 +588,7 @@ class Engagement:
         if finishes:
             _, eta, _, actor, evidence, effective = min(finishes, key=lambda row: row[:3])
             return Decision("FINISH", actor, True, "safe_observed_finish", evidence.kind,
-                            max(0.0, now - evidence.at), eta, effective, tuple(exclusions))
+                            max(0.0, now - evidence.at), eta, effective, tuple(exclusions),
+                            fresh_authorized | {actor["id"]})
         return Decision("OBSERVE", None, False, "no_authorized_mech_target", finish_budget_s=budget,
-                        exclusions=tuple(exclusions))
+                        exclusions=tuple(exclusions), authorized_ids=fresh_authorized)
