@@ -92,6 +92,18 @@ class GeometryTests(unittest.TestCase):
     def test_world_bounds_account_for_radius(self):
         self.assertFalse(self.map.point_clear((1, 1, 0), 2.5, 9))
 
+    def test_centimetre_rounded_wall_contact_can_escape_but_not_enter_wall(self):
+        contact=(3.501,10,0)
+        self.assertTrue(self.map.point_clear(contact,2.5,9))
+        self.assertTrue(self.map.move_clear(contact,(2.75,10,0),2.5,9))
+        self.assertFalse(self.map.move_clear(contact,(4,10,0),2.5,9))
+
+    def test_match_margin_is_center_limit_without_double_counting_radius(self):
+        inset=geometry.ArenaMap(self.root,{"match":{"arena_margin":5},"mech":{"step_up":1.2,"max_slope_deg":50}})
+        self.assertFalse(inset.point_clear((3,30,0),2.5,9))
+        self.assertTrue(inset.point_clear((5,30,0),2.5,9))
+        self.assertTrue(inset.move_clear((5,30,0),(6,30,0),2.5,9))
+
     def test_cached_descent_does_not_authorize_steep_ascent(self):
         root = self.root / "slope"
         self.write_map(root, sloped=True)
@@ -130,6 +142,18 @@ class RecordedCoverRegression(unittest.TestCase):
         protected=[p for p in candidates if (p[0]-pos[0])**2+(p[1]-pos[1])**2<35**2
                    and not world.line_of_fire((p[0],p[1],p[2]+7),enemy)]
         self.assertTrue(protected,"Shortlist must include the reachable-around-building protected side")
+
+    def test_eight_cube_mech_cannot_pass_recorded_low_bridge(self):
+        arena=ROOT / "arena"
+        if not (arena / "v2/world.json").exists():
+            self.skipTest("Bundled official arena is unavailable")
+        world=geometry.ArenaMap(arena,{"match":{"arena_margin":30},"mech":{"radius":2.5,"height":9,"step_up":1.2,"max_slope_deg":50}})
+        pos=(-117.66,-25.95,-4.87)
+        southeast=(-116.84,-27.77,-4.87)
+        self.assertTrue(world.move_clear(pos,southeast,2.5,9))
+        self.assertFalse(world.move_clear(pos,southeast,3.5,12.6))
+        self.assertTrue(world.point_clear(pos,3.5,12.6),"Rounded contact should not trap the mech")
+        self.assertTrue(world.move_clear(pos,(-118.48,-24.13,-4.87),3.5,12.6))
 
 
 if __name__ == "__main__":

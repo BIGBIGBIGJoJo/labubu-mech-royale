@@ -52,7 +52,23 @@ class Combat:
         self.config = config
         self.line_of_fire = line_of_fire
         self.sim_dt = 1.0 / max(1.0, float(config.get("match", {}).get("tick_hz", 20)))
+        self.action_dt = self.sim_dt * max(1, int(config.get("match", {}).get("decide_every", 2)))
         self._full_since = {}
+        self._mortar_slot = None
+        self._mortar_target = None
+        self._mortar_until = -1.0
+        self._mortar_retry_at = -1.0
+        # Enemy armor is not part of the standard actor observation. Bound it
+        # using all configured armor upgrades instead of assuming zero armor.
+        armor = max(0.0, float(config.get("mech", {}).get("armor", 0)))
+        armor_multiplier = 1.0
+        for upgrade in config.get("upgrades", []):
+            stacks = max(0, int(upgrade.get("max", 1)))
+            for effect in upgrade.get("effects", []):
+                if effect.get("path") == "mech.armor":
+                    armor += max(0.0, effect.get("add", 0.0)) * stacks
+                    armor_multiplier *= max(1.0, effect.get("mul", 1.0)) ** stacks
+        self.max_enemy_armor = min(0.95, armor * armor_multiplier)
 
     def _clear(self, start, end):
         return self.line_of_fire is None or bool(self.line_of_fire(start, end))
@@ -78,17 +94,50 @@ class Combat:
         stats = dict(self.config.get("mech", {}))
         stats.update(me.get("stats", {}))
         scale = 1.0 + self.config.get("cubes", {}).get("size_per_cube", 0.05) * me.get("cubes", 0)
-        for key, default in (("radius", 2.5), ("height", 9.0), ("muzzle_height", 7.0)):
+        # Live stats retain the pre-cube radius/height, whereas eye and muzzle
+        # heights already include cube growth. Scale these two groups once.
+        for key, default in (("radius", 2.5), ("height", 9.0)):
+            stats[key] = stats.get(key, default) * scale
+        for key, default in (("eye_height", 8.0), ("muzzle_height", 7.0)):
             if key not in me.get("stats", {}):
                 stats[key] = self.config.get("mech", {}).get(key, default) * scale
         return stats
 
-    def _slewed(self, actual, command, stats):
-        yaw_step = max(0.0, stats.get("turn_rate", 4.0)) * self.sim_dt
-        pitch_step = max(0.0, stats.get("pitch_rate", 3.0)) * self.sim_dt
+    def _slewed(self, actual, command, stats, seconds=None):
+        seconds = self.sim_dt if seconds is None else seconds
+        yaw_step = max(0.0, stats.get("turn_rate", 4.0)) * seconds
+        pitch_step = max(0.0, stats.get("pitch_rate", 3.0)) * seconds
         dy = max(-yaw_step, min(yaw_step, angle_delta(command[0], actual[0])))
         dp = max(-pitch_step, min(pitch_step, command[1] - actual[1]))
         return [actual[0] + dy, actual[1] + dp]
+
+    def laser_damage_bound(self, me, stats, target, charge):
+        """Conservative laser damage for deciding an early lethal release.
+
+        Weapon stats already contain weapon upgrades. Cube damage remains a
+        separate documented multiplier. NPCs/crates have no armor; unknown
+        mech armor is bounded by the configured upgrade pool. Rear bonus is
+        deliberately omitted because the opponent can turn before impact.
+        """
+        full = max(1e-6, float(stats.get("charge", 0.75)))
+        fraction = stats.get("min_frac", 0.35)
+        amount = stats.get("damage", 315.0) * (fraction + (1 - fraction) * min(1.0, max(0.0, charge) / full))
+        cube_config = self.config.get("cubes", {})
+        amount *= 1 + cube_config.get("damage_per_cube", 0.04) * min(me.get("cubes", 0), cube_config.get("stat_cap", 10))
+        if target.get("kind", "mech") == "mech":
+            armor = target.get("armor", target.get("stats", {}).get("armor", self.max_enemy_armor))
+            if not isinstance(armor, (int, float)) or not math.isfinite(armor):
+                armor = self.max_enemy_armor
+            amount *= 1 - max(0.0, min(0.95, armor))
+            if "mortar" in target.get("weapons", []):
+                amount *= 1 + stats.get("cookoff", 0.6)
+        return amount
+
+    def _laser_lethal(self, me, stats, target, charge):
+        hp = target.get("hp")
+        return (isinstance(hp, (int, float)) and math.isfinite(hp) and hp > 0
+                and charge >= stats.get("min_charge", 0.15) - 1e-6
+                and self.laser_damage_bound(me, stats, target, charge) >= hp + 1e-6)
 
     def _aligned(self, actual_next, solution, radius, height, projectile_radius=0.0):
         distance = max(0.01, solution["horizontal"])
@@ -206,6 +255,7 @@ class Combat:
         own = self._self_stats(me)
         actual = list(me.get("aim", [0.0, 0.0]))
         action = {"aim": actual, "fire": [False, False], "reload": False}
+        now = float(obs.get("t", obs.get("tick", 0) * self.sim_dt))
         # Early reload while recovering or with no target; there is no benefit
         # to partial magazines during an otherwise idle interval.
         for weapon in weapons:
@@ -216,32 +266,42 @@ class Combat:
                     action["reload"] = True
         if target is None or not allow_fire:
             self._full_since.clear()
+            self._mortar_slot = None
             return action
+        if emergency:
+            self._mortar_slot = None
 
         radius, height = self._body(target)
         velocity = list(target.get("vel", [0.0, 0.0, 0.0]))
         center = list(target["pos"])
         center[2] += height * 0.5
-        # Target motion until the first simulation step. Later gun flight is
-        # accounted for separately by the quadratic intercept.
-        center = [center[i] + velocity[i] * self.sim_dt for i in range(3)]
         origin = list(me["pos"])
         origin[2] += own.get("muzzle_height", 7.0)
         limits = (own.get("min_pitch", -0.7), own.get("max_pitch", 1.3))
-        solutions, stats_by_slot, ready = {}, {}, {}
+        solutions, stats_by_slot, ready, fire_delay = {}, {}, {}, {}
         for slot, weapon in enumerate(weapons):
             if not weapon:
                 continue
             kind = weapon["kind"]
             stats = stats_by_slot[slot] = self._stats(weapon)
-            ready[slot] = weapon.get("cooldown", 0.0) <= self.sim_dt + 1e-6
+            ready_in = max(0.0, weapon.get("cooldown", 0.0))
+            if kind == "gun":
+                ready_in = max(ready_in, weapon.get("reload", 0.0))
+            ready[slot] = ready_in <= self.action_dt + 1e-6
+            # Actions remain held for decide_every simulation ticks. Predict
+            # torso slew at the first tick on which this weapon can fire, not
+            # always at the first tick and not at an arbitrarily later tick.
+            fire_delay[slot] = min(self.action_dt, max(self.sim_dt, math.ceil((ready_in - 1e-8) / self.sim_dt) * self.sim_dt)) if ready[slot] else self.sim_dt
+            if kind == "laser" and weapon.get("charge", 0.0) > 0:
+                fire_delay[slot] = self.sim_dt
+            launch_target = [center[i] + velocity[i] * fire_delay[slot] for i in range(3)]
             if kind == "mortar":
                 mortar_origin = list(me["pos"])
                 mortar_origin[2] += own.get("height", 9.0) + 0.5
                 # Do not perform arc checks for a weapon that cannot shoot.
-                sol = self._mortar_solution(stats, mortar_origin, center, velocity, me, own, limits) if ready[slot] else None
+                sol = self._mortar_solution(stats, mortar_origin, launch_target, velocity, me, own, limits) if ready[slot] else None
             else:
-                sol = self._direct_solution(kind, stats, origin, center, velocity, own["radius"] + 0.5, limits, height)
+                sol = self._direct_solution(kind, stats, origin, launch_target, velocity, own["radius"] + 0.5, limits, height)
             if sol:
                 solutions[slot] = sol
 
@@ -251,8 +311,22 @@ class Combat:
         owner = None
         if charging is not None and charging in solutions:
             weapon = weapons[charging]
-            if emergency or weapon.get("charge", 0) >= stats_by_slot[charging].get("charge", 0.75) - 0.12:
+            if (emergency or weapon.get("charge", 0) >= stats_by_slot[charging].get("charge", 0.75) - 0.12
+                    or self._laser_lethal(me, stats_by_slot[charging], target, weapon.get("charge", 0))):
                 owner = charging
+        if self._mortar_slot is not None:
+            slot = self._mortar_slot
+            same_target = self._mortar_target == target.get("id")
+            usable = (slot in solutions and weapons[slot] and weapons[slot]["kind"] == "mortar"
+                      and ready[slot] and solutions[slot]["clear"] and same_target and not emergency)
+            if not usable or now >= self._mortar_until:
+                if usable and now >= self._mortar_until:
+                    self._mortar_retry_at = now + self.action_dt
+                self._mortar_slot = None
+            elif owner is None:
+                # Finish slewing a valid low arc instead of alternating it with
+                # a newly ready gun before either weapon has a usable aim.
+                owner = slot
         if owner is None:
             candidates = []
             for slot, sol in solutions.items():
@@ -260,14 +334,15 @@ class Combat:
                     continue
                 weapon, stats = weapons[slot], stats_by_slot[slot]
                 kind = weapon["kind"]
-                if kind == "gun" and not weapon.get("reload", 0) and weapon.get("ammo", 1) > 0:
+                reload_ending = 0 < weapon.get("reload", 0) <= self.action_dt + 1e-6
+                if kind == "gun" and (weapon.get("reload", 0) <= self.action_dt + 1e-6) and (weapon.get("ammo", 1) > 0 or reload_ending):
                     priority = 50 if ready[slot] else 15
                 elif kind == "laser" and (ready[slot] or weapon.get("charge", 0) > 0):
                     priority = 35 if not emergency else 5
                 elif kind == "lightning" and ready[slot]:
                     priority = 65 if me.get("energy", 0) >= stats.get("energy", 3) + (18 if emergency else 8) else 0
                 elif kind == "mortar" and ready[slot]:
-                    priority = 25
+                    priority = 25 if not emergency and now >= self._mortar_retry_at else 0
                 else:
                     priority = 0
                 if priority:
@@ -276,25 +351,28 @@ class Combat:
                 owner = max(candidates)[2]
         if owner is not None:
             action["aim"] = list(solutions[owner]["aim"])
+            if weapons[owner]["kind"] == "mortar" and self._mortar_slot is None and not emergency:
+                self._mortar_slot = owner
+                self._mortar_target = target.get("id")
+                self._mortar_until = now + 0.3
         else:
             # Track even while reloading or behind cover, but never pretend
             # remembered actors are necessarily directly visible.
             track = point_aim(origin, center)
             action["aim"] = [track[0], max(limits[0], min(limits[1], track[1]))]
-        actual_next = self._slewed(actual, action["aim"], own)
-        now = float(obs.get("t", obs.get("tick", 0) * self.sim_dt))
-
         for slot, weapon in enumerate(weapons):
             if not weapon:
                 continue
             kind, stats = weapon["kind"], stats_by_slot[slot]
             sol = solutions.get(slot)
             valid = bool(sol and sol["clear"])
+            actual_next = self._slewed(actual, action["aim"], own, fire_delay[slot])
             if kind == "gun":
                 aligned = valid and self._aligned(actual_next, sol, radius, height,
                                                   self.config.get("projectile", {}).get("gun_radius", 0.3))
-                action["fire"][slot] = bool(ready[slot] and aligned and not weapon.get("reload", 0)
-                                             and weapon.get("ammo", 1) > 0 and not action["reload"])
+                reload_ending = 0 < weapon.get("reload", 0) <= self.action_dt + 1e-6
+                action["fire"][slot] = bool(ready[slot] and aligned and weapon.get("reload", 0) <= self.action_dt + 1e-6
+                                             and (weapon.get("ammo", 1) > 0 or reload_ending) and not action["reload"])
                 if not valid and not weapon.get("reload", 0) and weapon.get("ammo", 99) <= 3:
                     action["reload"] = True
             elif kind == "laser":
@@ -308,7 +386,8 @@ class Combat:
                 if charge > 0:
                     max_wait = min(0.35, max(0.0, stats.get("hold_s", 2.0) * 0.5))
                     hold_expired = now - self._full_since.get(slot, now) >= max_wait
-                    release = emergency or (charge >= full - 1e-6 and (aligned or hold_expired))
+                    lethal = aligned and self._laser_lethal(me, stats, target, charge)
+                    release = emergency or lethal or (charge >= full - 1e-6 and (aligned or hold_expired))
                     # Invalid target solution (range/pitch) cannot be repaired
                     # by charging longer. Release to restore movement.
                     action["fire"][slot] = bool(not release and sol is not None)

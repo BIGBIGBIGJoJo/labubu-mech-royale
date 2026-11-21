@@ -97,6 +97,18 @@ class StrategyTests(unittest.TestCase):
         self.assertEqual(center, [10, 0])
         self.assertAlmostEqual(radius, 524)
 
+    def test_cube_collision_size_scales_but_live_eye_muzzle_do_not_twice(self):
+        me = self.obs["self"]
+        me["cubes"] = 8
+        me["stats"].update(radius=2.5, height=9, eye_height=11.2, muzzle_height=9.8)
+        before = copy.deepcopy(me)
+        stats = self.bot.stats(me)
+        self.assertAlmostEqual(stats["radius"], 3.5)
+        self.assertAlmostEqual(stats["height"], 12.6)
+        self.assertAlmostEqual(stats["eye_height"], 11.2)
+        self.assertAlmostEqual(stats["muzzle_height"], 9.8)
+        self.assertEqual(me, before)
+
     def test_zone_uses_remaining_shrink_not_original_duration(self):
         self.obs["t"] = 85
         self.obs["zone"].update(center=[20, 0], radius=400, next_center=[40, 0], next_radius=300)
@@ -120,6 +132,18 @@ class StrategyTests(unittest.TestCase):
         self.assertTrue(self.bot.recover)
         self.assertEqual(self.bot.mode, "recover", "Defensive fire must not cancel escape movement")
         self.assertTrue(action["fire"][0])
+
+    def test_reloading_recovery_faces_between_split_attackers(self):
+        self.obs["self"]["hp"] = 400
+        self.obs["self"]["aim"] = [2.22, 0]
+        self.obs["self"]["weapons"][0].update(ammo=0, reload=1.2)
+        angles = (.49, 2.22)
+        self.obs["mechs"] = [self.enemy(60 * math.cos(a), 60 * math.sin(a), id=i + 5)
+                             for i, a in enumerate(angles)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(action["fire"], [False, False])
+        for angle in angles:
+            self.assertLess(abs((angle - action["aim"][0] + math.pi) % math.tau - math.pi), math.pi / 2)
 
     def test_open_field_recovery_retreats_while_facing_attacker(self):
         self.obs["self"]["hp"] = 500
@@ -345,12 +369,25 @@ class StrategyTests(unittest.TestCase):
                 self.assertFalse(action["boost"])
 
     def test_stationary_enemy_at_preferred_distance_keeps_strafe(self):
-        self.obs["mechs"] = [self.enemy(70, vel=[0, 0, 0])]
+        self.obs["mechs"] = [self.enemy(120, vel=[0, 0, 0])]
         action = self.bot.act(self.obs)
         self.assertEqual(self.bot.mode, "engage")
         self.assertLess(abs(action["move"][0]), 0.1)
         self.assertGreater(abs(action["move"][1]), 0.9)
         self.assertFalse(action["boost"])
+
+    def test_ranged_duel_opens_space_for_projectile_reaction(self):
+        self.obs["mechs"] = [self.enemy(70)]
+        action = self.bot.act(self.obs)
+        self.assertLess(action["move"][0], -.5)
+        self.assertTrue(action["fire"][0])
+
+    def test_healthy_lightning_loadout_closes_to_use_secondary(self):
+        self.obs["self"]["weapons"][1] = self.weapon("lightning")
+        self.obs["mechs"] = [self.enemy(80)]
+        action = self.bot.act(self.obs)
+        self.assertGreater(action["move"][0], .5,
+                           "A healthy isolated duel should not keep lightning outside its range")
 
     def test_pickup_requires_vertical_and_horizontal_reach(self):
         self.obs["pickups"] = [{"id": 8001, "kind": "laser", "pos": [1, 0, 5]}]

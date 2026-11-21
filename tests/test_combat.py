@@ -58,15 +58,80 @@ class CombatTests(unittest.TestCase):
         action = combat.Combat(CONFIG).plan(observation(weapon("gun")), enemy())
         self.assertTrue(action["fire"][0])
 
+    def test_gun_ready_on_second_simulation_tick_fires(self):
+        action = combat.Combat(CONFIG).plan(observation(weapon("gun", cooldown=0.09)), enemy())
+        self.assertTrue(action["fire"][0])
+
+    def test_gun_not_ready_during_action_stays_off(self):
+        action = combat.Combat(CONFIG).plan(observation(weapon("gun", cooldown=0.11)), enemy())
+        self.assertFalse(action["fire"][0])
+
+    def test_aim_slew_uses_first_available_weapon_tick(self):
+        target = enemy(100 * math.cos(0.32), 100 * math.sin(0.32))
+        delayed = observation(weapon("gun", cooldown=0.09))
+        immediate = observation(weapon("gun", cooldown=0.02))
+        self.assertTrue(combat.Combat(CONFIG).plan(delayed, target)["fire"][0])
+        self.assertFalse(combat.Combat(CONFIG).plan(immediate, target)["fire"][0])
+
+    def test_reload_finishing_within_held_action_can_fire(self):
+        obs = observation(weapon("gun", ammo=0, reload=0.08))
+        action = combat.Combat(CONFIG).plan(obs, enemy())
+        self.assertFalse(action["reload"])
+        self.assertTrue(action["fire"][0])
+
+    def test_later_launch_gets_additional_target_motion(self):
+        target = enemy(100, 0, [0, 12, 0])
+        immediate = combat.Combat(CONFIG).plan(observation(weapon("gun")), target)
+        delayed = combat.Combat(CONFIG).plan(observation(weapon("gun", cooldown=0.09)), target)
+        self.assertGreater(delayed["aim"][0], immediate["aim"][0] + 0.004)
+
     def test_large_mech_can_aim_at_close_opponents_upper_body(self):
         controller = combat.Combat(CONFIG)
         obs = observation(weapon("gun"))
         obs["self"]["cubes"] = 10
-        obs["self"]["stats"].update(radius=3.75, height=13.5, muzzle_height=10.5)
+        obs["self"]["stats"].update(radius=2.5, height=9.0, muzzle_height=10.5)
         obs["self"]["aim"] = [0, -0.7]
         action = controller.plan(obs, enemy(6.5))
         self.assertGreaterEqual(action["aim"][1], -0.7)
         self.assertTrue(action["fire"][0])
+
+    def test_live_cube_stats_scale_body_but_not_eye_or_muzzle_twice(self):
+        controller = combat.Combat(CONFIG)
+        obs = observation(weapon("gun"))
+        obs["self"]["cubes"] = 8
+        obs["self"]["stats"].update(radius=2.5, height=9, eye_height=11.2, muzzle_height=9.8)
+        stats = controller._self_stats(obs["self"])
+        self.assertAlmostEqual(stats["radius"], 3.5)
+        self.assertAlmostEqual(stats["height"], 12.6)
+        self.assertAlmostEqual(stats["eye_height"], 11.2)
+        self.assertAlmostEqual(stats["muzzle_height"], 9.8)
+        obs["self"]["stats"] = {}
+        fallback = controller._self_stats(obs["self"])
+        for key in ("radius", "height", "eye_height", "muzzle_height"):
+            self.assertAlmostEqual(fallback[key], stats[key])
+
+    def test_live_cube_body_reaches_mortar_origin_and_barrel_offset(self):
+        controller = combat.Combat(CONFIG)
+        obs = observation(weapon("gun"), weapon("mortar"))
+        obs["self"]["cubes"] = 8
+        obs["self"]["pos"][2] = 2.0
+        obs["self"]["stats"].update(radius=2.5, height=9, eye_height=11.2, muzzle_height=9.8)
+        captured = {}
+        original_direct = controller._direct_solution
+        original_mortar = controller._mortar_solution
+        def direct(*args):
+            captured["barrel_offset"] = args[5]
+            captured["gun_origin"] = list(args[2])
+            return original_direct(*args)
+        def mortar(*args):
+            captured["mortar_origin"] = list(args[1])
+            return original_mortar(*args)
+        controller._direct_solution = direct
+        controller._mortar_solution = mortar
+        controller.plan(obs, enemy(120))
+        self.assertAlmostEqual(captured["barrel_offset"], 4.0)
+        self.assertAlmostEqual(captured["gun_origin"][2], 11.8)
+        self.assertAlmostEqual(captured["mortar_origin"][2], 15.1)
 
     def test_wall_blocks_remembered_target(self):
         action = combat.Combat(CONFIG, lambda a, b: False).plan(
@@ -109,6 +174,46 @@ class CombatTests(unittest.TestCase):
         self.assertTrue(controller.plan(obs, enemy())["fire"][0])
         obs["self"]["weapons"][0]["charge"] = 0.75
         self.assertFalse(controller.plan(obs, enemy())["fire"][0])
+
+    def test_partial_laser_releases_when_lethal_to_npc(self):
+        obs = observation(weapon("laser", charge=0.4))
+        target = enemy()
+        target.update(kind="npc", hp=200)
+        self.assertFalse(combat.Combat(CONFIG).plan(obs, target)["fire"][0])
+
+    def test_partial_laser_respects_unknown_enemy_armor(self):
+        obs = observation(weapon("laser", charge=0.4))
+        target = enemy()
+        target["hp"] = 200
+        self.assertTrue(combat.Combat(CONFIG).plan(obs, target)["fire"][0])
+        target["armor"] = 0
+        self.assertFalse(combat.Combat(CONFIG).plan(obs, target)["fire"][0])
+
+    def test_early_laser_damage_applies_cube_scaling_once(self):
+        controller = combat.Combat(CONFIG)
+        obs = observation(weapon("laser", charge=0.4))
+        obs["self"]["cubes"] = 10
+        target = enemy()
+        target["hp"] = 220
+        bound = controller.laser_damage_bound(obs["self"], CONFIG["weapons"]["laser"], target, 0.4)
+        self.assertAlmostEqual(bound, 315 * (0.35 + 0.65 * 0.4 / 0.75) * 1.4 * 0.76)
+        self.assertFalse(controller.plan(obs, target)["fire"][0])
+
+    def test_lethal_release_waits_for_clear_aligned_aim(self):
+        obs = observation(weapon("laser", charge=0.4))
+        target = enemy()
+        target.update(kind="npc", hp=100)
+        self.assertTrue(combat.Combat(CONFIG, lambda a, b: False).plan(obs, target)["fire"][0])
+        obs["self"]["aim"] = [math.pi, 0]
+        self.assertTrue(combat.Combat(CONFIG).plan(obs, target)["fire"][0])
+
+    def test_lethal_laser_owns_shared_aim_before_full_charge(self):
+        obs = observation(weapon("gun"), weapon("laser", charge=0.4))
+        target = enemy(100, 0, [0, 15, 0])
+        target.update(kind="npc", hp=200)
+        action = combat.Combat(CONFIG).plan(obs, target)
+        self.assertLess(action["aim"][0], 0.01)
+        self.assertFalse(action["fire"][1])
 
     def test_full_laser_waits_for_alignment_but_not_forever(self):
         controller = combat.Combat(CONFIG)
@@ -158,6 +263,47 @@ class CombatTests(unittest.TestCase):
         self.assertTrue(controller.plan(obs, target)["fire"][0])
         blocked = combat.Combat(CONFIG, lambda a, b: False).plan(obs, target)
         self.assertFalse(blocked["fire"][0])
+
+    def test_mortar_aim_commitment_survives_a_newly_ready_gun(self):
+        controller = combat.Combat(CONFIG)
+        obs = observation(weapon("gun", cooldown=0.2), weapon("mortar"))
+        target = enemy(150)
+        initial = controller.plan(obs, target)
+        self.assertGreater(initial["aim"][1], 0.25)
+        obs["t"] += 0.1
+        obs["self"]["aim"] = initial["aim"]
+        obs["self"]["weapons"][0]["cooldown"] = 0
+        committed = controller.plan(obs, target)
+        self.assertTrue(committed["fire"][1])
+        self.assertFalse(committed["fire"][0])
+        obs["t"] += 0.1
+        obs["self"]["weapons"][1]["cooldown"] = 2.5
+        after_shot = controller.plan(obs, target)
+        self.assertLess(after_shot["aim"][1], 0)
+        self.assertFalse(after_shot["fire"][1])
+
+    def test_mortar_commitment_expires_and_yields_to_gun(self):
+        controller = combat.Combat(CONFIG)
+        obs = observation(weapon("gun", cooldown=0.2), weapon("mortar"))
+        target = enemy(150)
+        controller.plan(obs, target)
+        obs["t"] += 0.31
+        obs["self"]["weapons"][0]["cooldown"] = 0
+        action = controller.plan(obs, target)
+        self.assertLess(action["aim"][1], 0)
+        self.assertFalse(action["fire"][1])
+
+    def test_recovery_preempts_mortar_commitment(self):
+        for kwargs in ({"emergency": True}, {"allow_fire": False}):
+            controller = combat.Combat(CONFIG)
+            obs = observation(weapon("gun", cooldown=0.2), weapon("mortar"))
+            target = enemy(150)
+            controller.plan(obs, target)
+            obs["t"] += 0.1
+            obs["self"]["weapons"][0]["cooldown"] = 0
+            action = controller.plan(obs, target, **kwargs)
+            self.assertFalse(action["fire"][1])
+            self.assertIsNone(controller._mortar_slot)
 
     def test_cube_geometry_and_input_unchanged(self):
         controller = combat.Combat(CONFIG)

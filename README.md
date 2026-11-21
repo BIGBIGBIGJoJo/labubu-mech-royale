@@ -24,10 +24,12 @@ conformance; it does **not** establish a gameplay score.
 
 See [DESIGN.md](DESIGN.md) for the competition requirements, strategy,
 implementation plan, limits, and evaluation process.
+See [STRATEGY_V2.md](STRATEGY_V2.md) for the 6.3 target, evidence, and next design.
 
-- `bot.py`: strategy, recovery, upgrades, loot, zone prediction, tactical evasion.
+- `bot.py`: strategy, recovery, upgrades, resource completion, and zone prediction.
 - `arena_map.py`: spatial index, terrain, solid geometry, bounded navigation.
 - `combat.py`: shared aim arbitration and weapon control.
+- `tactical.py`: bounded physical trajectories, swept projectile avoidance, and exposure.
 - `mechfight.py`: official stdin/stdout wrapper.
 - `check/`, `arena/`, `protocol.md`, `mechfight.schema.json`: official kit resources.
 - `tests/`: behavioral and geometry regression tests.

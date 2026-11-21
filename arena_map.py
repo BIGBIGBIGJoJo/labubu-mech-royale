@@ -62,6 +62,7 @@ class ArenaMap:
     """
     BIN = 24.0
     GRID = 5.0
+    CONTACT_EPS = 0.015  # Observed world positions are rounded to centimetres.
 
     def __init__(self, map_dir, config):
         self.available = False
@@ -82,6 +83,7 @@ class ArenaMap:
         mech = config.get("mech", {})
         self.step_up = float(mech.get("step_up", 1.2))
         self.max_slope = math.tan(math.radians(float(mech.get("max_slope_deg", 50))))
+        self.arena_margin = max(0.0,float(config.get("match",{}).get("arena_margin",0)))
         try:
             root = Path(map_dir) / "v2"
             world = json.loads((root / "world.json").read_text(encoding="utf-8"))
@@ -222,8 +224,13 @@ class ArenaMap:
         if not self.available:
             return True
         x, y, z = pos
+        collision_radius=max(0.0,radius-self.CONTACT_EPS)
         b = self.bounds
-        if not (b["minX"] + radius <= x <= b["maxX"] - radius and b["minY"] + radius <= y <= b["maxY"] - radius):
+        # arena_margin is an authoritative center-position inset. Recorded
+        # centers clamp at raw minY+30, not minY+30+body_radius. The larger
+        # clearance also keeps very large bodies inside the physical map.
+        inset=max(radius,self.arena_margin)
+        if not (b["minX"] + inset-1e-6 <= x <= b["maxX"] - inset+1e-6 and b["minY"] + inset-1e-6 <= y <= b["maxY"] - inset+1e-6):
             return False
         for index in self._candidates(x-radius, y-radius, x+radius, y+radius):
             p = self.prisms[index]
@@ -236,9 +243,21 @@ class ArenaMap:
                 return False
             for ix in range(math.floor((x-radius)/self.BIN),math.floor((x+radius)/self.BIN)+1):
                 for iy in range(math.floor((y-radius)/self.BIN),math.floor((y+radius)/self.BIN)+1):
-                    if any(_distance2(x,y,*edge)<radius*radius for edge in p["edge_bins"].get((ix,iy),())):
+                    if any(_distance2(x,y,*edge)<collision_radius*collision_radius for edge in p["edge_bins"].get((ix,iy),())):
                         return False
         return True
+
+    def support_height(self,x,y,previous_z):
+        """Highest walkable supporting surface no more than step_up above feet."""
+        ground=self.ground_height(x,y)
+        if not self.available:
+            return ground
+        result=ground
+        for index in self._candidates(x,y,x,y):
+            p=self.prisms[index]
+            if result<p["top"]<=previous_z+self.step_up+0.02 and self._solid(p,x,y):
+                result=p["top"]
+        return result
 
     def move_clear(self, pos, end, radius=2.5, height=9.0):
         """Test a short grounded segment; also supports travel across a roof.
@@ -250,6 +269,7 @@ class ArenaMap:
             return True
         dx, dy = end[0]-pos[0], end[1]-pos[1]
         distance = math.hypot(dx, dy)
+        collision_radius=max(0.0,radius-self.CONTACT_EPS)
         if pos[2]<=self.ground_height(pos[0],pos[1])+self.step_up and not self._grade_clear(pos,end):
             return False
         # An exact horizontal capsule catches glancing corners that sampling
@@ -266,7 +286,7 @@ class ArenaMap:
             for ix in range(math.floor((min(pos[0],end[0])-radius)/self.BIN),math.floor((max(pos[0],end[0])+radius)/self.BIN)+1):
                 for iy in range(math.floor((min(pos[1],end[1])-radius)/self.BIN),math.floor((max(pos[1],end[1])+radius)/self.BIN)+1):
                     edges.update(prism["edge_bins"].get((ix,iy),()))
-            if any(_segments_distance2(pos[0],pos[1],end[0],end[1],*edge)<radius*radius-1e-6 for edge in edges):
+            if any(_segments_distance2(pos[0],pos[1],end[0],end[1],*edge)<collision_radius*collision_radius-1e-6 for edge in edges):
                 return False
         count = max(1, int(math.ceil(distance / max(0.8, min(2.0, radius * 0.65)))))
         prev_z = float(pos[2])
