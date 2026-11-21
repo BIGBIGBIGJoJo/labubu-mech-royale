@@ -13,6 +13,8 @@ from pathlib import Path
 import sys
 import time
 
+import navigation_cache
+
 
 def _inside(x, y, ring):
     inside = False
@@ -64,7 +66,7 @@ class ArenaMap:
     GRID = 5.0
     CONTACT_EPS = 0.015  # Observed world positions are rounded to centimetres.
 
-    def __init__(self, map_dir, config):
+    def __init__(self, map_dir, config, *, use_navigation_cache=True):
         self.available = False
         self.error = None
         self.prisms = []
@@ -72,6 +74,8 @@ class ArenaMap:
         self._walk_cache = {}
         self._edge_cache = {}
         self._active_dims = None
+        self._navigation_cache = None
+        self.navigation_cache_status = "disabled"
         self._search = None
         self._path = []
         self._path_key = None
@@ -124,6 +128,9 @@ class ArenaMap:
             self._prepare_cover(float(mech.get("radius",2.5)),float(mech.get("height",9)))
         except (OSError, ValueError, KeyError, TypeError) as exc:
             self.error = f"{type(exc).__name__}: {exc}"
+        if self.available and use_navigation_cache:
+            self._navigation_cache, self.navigation_cache_status = navigation_cache.load(
+                Path(__file__).with_name("navigation-cache.bin"), self, map_dir, __file__)
 
     def _prepare_cover(self,radius,height):
         """Build valid wall-adjacent points once, outside the decision budget."""
@@ -378,6 +385,10 @@ class ArenaMap:
     def _free(self, cell, dims):
         if not (0 <= cell[0] < self.gx and 0 <= cell[1] < self.gy):
             return False
+        if self._navigation_cache is not None:
+            result = self._navigation_cache.free(cell, dims)
+            if result is not None:
+                return result
         key=(dims,cell)
         value=self._walk_cache.get(key)
         if value is None:
@@ -419,6 +430,10 @@ class ArenaMap:
     def _traversable(self,cell,nxt,dims):
         # Terrain traversal is directional: a steep drop can be legal even
         # when climbing the same edge is impossible.
+        if self._navigation_cache is not None:
+            result = self._navigation_cache.traversable(cell, nxt, dims)
+            if result is not None:
+                return result
         edge_key=(dims,cell,nxt)
         result=self._edge_cache.get(edge_key)
         if result is None:
