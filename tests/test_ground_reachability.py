@@ -12,6 +12,7 @@ from unittest.mock import patch
 from arena_map import ArenaMap
 import ground_reachability as gr
 import test_strategy as strategy
+import test_geometry as fixtures
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,7 @@ def index(grid=(3, 1), free=b"\x07", edges=b"\x01\x01\x00"):
 
 class TinyArena:
     step_up = 1.2
+    CONTACT_EPS = .015
     def __init__(self):
         self.calls = []
         self.rule = lambda a, b: a == b
@@ -124,6 +126,37 @@ class GoalContextTests(unittest.TestCase):
         self.assertEqual(len(self.owner.goal_connectors), 512)
         self.assertNotIn(0, self.owner.goal_connectors)
 
+    def test_nearby_xy_does_not_certify_a_different_floor(self):
+        context = self.context((0., 0., 0.))
+        self.assertEqual(context.classify((0., 0., 14.)), gr.UNKNOWN)
+        self.assertEqual(context.classify((0., 0., 0.)), gr.YES)
+        self.assertEqual(context.classify((.5, 0., .01)), gr.YES)
+        self.assertEqual(self.arena.calls, [])
+
+    def test_airborne_or_rooftop_start_never_claims_a_ground_route(self):
+        self.arena.rule = lambda a, b: True
+        for z in (1.23, 14., -1.23):
+            context = self.context((0., 0., z))
+            self.assertEqual(context.classify((10., 0., 0.)), gr.UNKNOWN)
+            self.assertEqual(context.classify((0., 0., z)), gr.UNKNOWN)
+        self.assertEqual(self.arena.calls, [])
+
+    def test_bridge_roof_and_underpass_are_distinct_close_xy_goals(self):
+        # Existing real geometry fixture: bridge base12/top14 over ground0.
+        # Both bodies are clear, but holding XY on the roof cannot reach below.
+        with tempfile.TemporaryDirectory(prefix="mechfight-bridge-goal-") as temp:
+            root = Path(temp)
+            fixtures.GeometryTests.write_map(root)
+            arena = ArenaMap(root, {"mech": {"step_up": 1.2, "max_slope_deg": 50}},
+                             use_navigation_cache=False)
+            roof, underpass = (22., 10., 14.), (22., 10., 0.)
+            self.assertTrue(arena.point_clear(roof, *DIMS))
+            self.assertTrue(arena.point_clear(underpass, *DIMS))
+            owner = gr.GroundReachability(arena, index())
+            context = owner.begin(roof, *DIMS, time.perf_counter() + 1)
+            self.assertEqual(context.classify(underpass), gr.UNKNOWN)
+            self.assertEqual(context.classify(roof), gr.UNKNOWN)
+
 
 class RealReachabilityTests(unittest.TestCase):
     @classmethod
@@ -146,6 +179,22 @@ class RealReachabilityTests(unittest.TestCase):
         self.arena.navigate(start, cover, 2.875, 10.35, time.perf_counter() + 10)
         self.assertTrue(self.arena._search["done"])
         self.assertEqual(len(self.arena._search["closed"]), 38)
+
+    def test_recorded_low_bridge_roof_cannot_certify_ground_underpass(self):
+        # Inside the same bridge implicated by the recorded low-clearance case
+        # in test_geometry: base6.59/top8.59, terrain about -4.80.
+        x, y = -114.84, -29.77
+        roof = (x, y, 8.59)
+        underpass = (x, y, self.arena.ground_height(x, y))
+        self.assertTrue(self.arena.point_clear(roof, *DIMS))
+        self.assertTrue(self.arena.point_clear(underpass, *DIMS))
+        # move_clear retains roof support and does not certify requested end Z.
+        self.assertTrue(self.arena.move_clear(roof, underpass, *DIMS))
+        context = self.owner.begin(roof, *DIMS, time.perf_counter() + 1)
+        self.assertEqual(context.classify(underpass), gr.UNKNOWN)
+        farther = (-112.84, -31.77, self.arena.ground_height(-112.84, -31.77))
+        self.assertGreater(abs(farther[0] - roof[0]), 1)
+        self.assertEqual(context.classify(farther), gr.UNKNOWN)
 
     def test_asset_rejects_corruption_or_different_geometry_asset(self):
         with tempfile.TemporaryDirectory(prefix="mechfight-reachability-") as temp:
