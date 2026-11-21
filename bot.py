@@ -56,6 +56,7 @@ class Bot:
         self.recent_attackers = {}
         self.resource_key = None
         self.target_id = None
+        self.drop_mechs = {}  # Bounded last-listed memory, only for drop contestation.
 
     def stats(self, me):
         stats = {**self.config["mech"], **me.get("stats", {})}
@@ -83,6 +84,15 @@ class Bot:
 
     def update(self, obs):
         t, me = obs["t"], obs["self"]
+        dead = {e.get("target") for e in obs.get("events", []) if e["type"] == "kill"}
+        dead.update(a["id"] for a in obs.get("mechs", []) if a.get("hp", 1) <= 0)
+        self.drop_mechs = {aid: record for aid, record in self.drop_mechs.items()
+                           if aid not in dead and 0 <= t - record[0] < 2.0}
+        for actor in obs.get("mechs", []):
+            aid = actor.get("id")
+            if (actor.get("kind") == "mech" and isinstance(aid, int) and 0 <= aid < 16
+                    and aid != me["id"] and aid not in dead):
+                self.drop_mechs[aid] = (t, {"id": aid, "kind": "mech", "pos": tuple(actor["pos"])})
         if t >= self.visit_t + 1:
             cell = (int(me["pos"][0] // 35), int(me["pos"][1] // 35))
             self.visited[cell] = self.visited.get(cell, 0) + 1
@@ -323,6 +333,14 @@ class Bot:
         held = {w["kind"] for w in me["weapons"] if w}
         ranks = self.weapon_rank(obs)
         mechs = [q for q in threats if q["actor"]["kind"] == "mech"]
+        # A one-observation disappearance must not instantly make a drop safe.
+        # Current listings win, including actors excluded by the existing filter.
+        listed_ids = {actor["id"] for actor in obs.get("mechs", [])}
+        killed_ids = {e.get("target") for e in obs.get("events", []) if e["type"] == "kill"}
+        drop_contestants = [q["actor"] for q in mechs
+                           if q["actor"].get("hp", 1) > 0 and q["actor"]["id"] not in killed_ids]
+        drop_contestants.extend(actor for listed, actor in self.drop_mechs.values()
+                               if actor["id"] not in listed_ids and 0 <= t - listed < 2.0)
         pickup_r = self.config["cubes"]["pickup_radius"]
         eye = [p[0], p[1], p[2] + stats["muzzle_height"]]
         cube_gain = stats["hp"] * self.config["cubes"]["hp_per_cube"]
@@ -461,7 +479,7 @@ class Bot:
             if not safe_zone(point, completion):
                 continue
             # A known enemy that can contest before capture makes this speculative.
-            if any(max(0, distance(point, q["actor"]["pos"]) - drop["radius"]) / max(speed, self.config["mech"]["boost_speed"]) < completion + 1 for q in mechs):
+            if any(max(0, distance(point, actor["pos"]) - drop["radius"]) / max(speed, self.config["mech"]["boost_speed"]) < completion + 1 for actor in drop_contestants):
                 continue
             risk = exposure(point, travel, dwell)
             if risk is None:

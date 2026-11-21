@@ -1,0 +1,1316 @@
+[
+  {
+    "name": "offense_first",
+    "source": "offense-v1-live/20261121T134857Z-1754",
+    "previous": {
+      "type": "obs",
+      "tick": 1574,
+      "t": 78.7,
+      "self": {
+        "id": 0,
+        "pos": [
+          181.26,
+          -29.14,
+          5.79
+        ],
+        "vel": [
+          4.44,
+          18.99,
+          0
+        ],
+        "aim": [
+          -2.145,
+          -0.206
+        ],
+        "hp": 822.9,
+        "max_hp": 2060.8,
+        "energy": 33.7,
+        "max_energy": 100,
+        "grounded": true,
+        "cubes": 7,
+        "upgrades": [
+          "nanites",
+          "plating",
+          "gun_mag"
+        ],
+        "weapons": [
+          {
+            "kind": "gun",
+            "cooldown": 0.19,
+            "stats": {
+              "damage": 45,
+              "cooldown": 0.24,
+              "speed": 252,
+              "range": 230,
+              "spread_deg": 0.6,
+              "mag": 20,
+              "reload": 1.92
+            },
+            "ammo": 19,
+            "reload": 0
+          },
+          {
+            "kind": "laser",
+            "cooldown": 0,
+            "stats": {
+              "damage": 315,
+              "charge": 0.75,
+              "min_charge": 0.15,
+              "min_frac": 0.35,
+              "hold_s": 2,
+              "cooldown": 1.65,
+              "range": 280,
+              "pierce": 0,
+              "charge_turn_mult": 1,
+              "cookoff": 0.6
+            },
+            "charge": 0
+          }
+        ],
+        "in_zone": true,
+        "stats": {
+          "radius": 2.5,
+          "height": 9,
+          "eye_height": 10.8,
+          "muzzle_height": 9.45,
+          "hp": 1610,
+          "walk_speed": 11.7,
+          "boost_speed": 19.5,
+          "ground_accel": 58.5,
+          "air_accel": 12,
+          "gravity": 22,
+          "jump_speed": 11,
+          "jet_accel": 34,
+          "max_rise_speed": 10,
+          "step_up": 1.2,
+          "max_slope_deg": 50,
+          "energy": 100,
+          "energy_regen": 18,
+          "energy_regen_delay": 0.6,
+          "boost_drain": 17,
+          "jet_drain": 15,
+          "turn_rate": 4,
+          "pitch_rate": 3,
+          "min_pitch": -0.7,
+          "max_pitch": 1.3,
+          "regen_delay": 3.5,
+          "regen_per_s": 72,
+          "charge_move_mult": 0.5,
+          "self_damage_mult": 0.5,
+          "armor": 0,
+          "rear_mult": 1.5,
+          "front_arc_deg": 180,
+          "near_range_bonus": 0,
+          "vision_bonus": 0,
+          "hearing": 1
+        }
+      },
+      "mechs": [
+        {
+          "id": 10,
+          "kind": "mech",
+          "pos": [
+            222.78,
+            13.83,
+            5.27
+          ],
+          "vel": [
+            -0.86,
+            -11.67,
+            0
+          ],
+          "aim": [
+            -1.733,
+            -0.008
+          ],
+          "hp": 634.75,
+          "max_hp": 1400,
+          "cubes": 0,
+          "weapons": [
+            "gun",
+            "laser"
+          ],
+          "charging": false
+        },
+        {
+          "id": 106,
+          "kind": "npc",
+          "pos": [
+            158.79,
+            -68.62,
+            5.24
+          ],
+          "vel": [
+            2.47,
+            4.35,
+            0
+          ],
+          "aim": [
+            1.054,
+            0.065
+          ],
+          "hp": 55,
+          "max_hp": 350
+        },
+        {
+          "id": 109,
+          "kind": "npc",
+          "pos": [
+            128.77,
+            -21.57,
+            5.69
+          ],
+          "vel": [
+            0.73,
+            2.91,
+            0
+          ],
+          "aim": [
+            1.326,
+            0.012
+          ],
+          "hp": 299.6,
+          "max_hp": 350
+        }
+      ],
+      "events": [],
+      "zone": {
+        "center": [
+          34.21,
+          -72.34
+        ],
+        "radius": 371.6,
+        "next_center": [
+          106.42,
+          -97.38
+        ],
+        "next_radius": 240,
+        "shrink_start": 77.5,
+        "shrink_end": 97.5,
+        "dps": 35
+      },
+      "drops": [
+        {
+          "id": 20001,
+          "pos": [
+            214.86,
+            -93.59,
+            5.22
+          ],
+          "radius": 8,
+          "lands_in": 3.8,
+          "capture_s": 4,
+          "progress": 0,
+          "holder": null
+        }
+      ]
+    },
+    "current": {
+      "type": "obs",
+      "tick": 1576,
+      "t": 78.8,
+      "self": {
+        "id": 0,
+        "pos": [
+          181.66,
+          -27.23,
+          5.8
+        ],
+        "vel": [
+          3.99,
+          19.09,
+          0
+        ],
+        "aim": [
+          -2.129,
+          -0.2
+        ],
+        "hp": 822.9,
+        "max_hp": 2060.8,
+        "energy": 32,
+        "max_energy": 100,
+        "grounded": true,
+        "cubes": 7,
+        "upgrades": [
+          "nanites",
+          "plating",
+          "gun_mag"
+        ],
+        "weapons": [
+          {
+            "kind": "gun",
+            "cooldown": 0.09,
+            "stats": {
+              "damage": 45,
+              "cooldown": 0.24,
+              "speed": 252,
+              "range": 230,
+              "spread_deg": 0.6,
+              "mag": 20,
+              "reload": 1.92
+            },
+            "ammo": 19,
+            "reload": 0
+          },
+          {
+            "kind": "laser",
+            "cooldown": 0,
+            "stats": {
+              "damage": 315,
+              "charge": 0.75,
+              "min_charge": 0.15,
+              "min_frac": 0.35,
+              "hold_s": 2,
+              "cooldown": 1.65,
+              "range": 280,
+              "pierce": 0,
+              "charge_turn_mult": 1,
+              "cookoff": 0.6
+            },
+            "charge": 0
+          }
+        ],
+        "in_zone": true,
+        "stats": {
+          "radius": 2.5,
+          "height": 9,
+          "eye_height": 10.8,
+          "muzzle_height": 9.45,
+          "hp": 1610,
+          "walk_speed": 11.7,
+          "boost_speed": 19.5,
+          "ground_accel": 58.5,
+          "air_accel": 12,
+          "gravity": 22,
+          "jump_speed": 11,
+          "jet_accel": 34,
+          "max_rise_speed": 10,
+          "step_up": 1.2,
+          "max_slope_deg": 50,
+          "energy": 100,
+          "energy_regen": 18,
+          "energy_regen_delay": 0.6,
+          "boost_drain": 17,
+          "jet_drain": 15,
+          "turn_rate": 4,
+          "pitch_rate": 3,
+          "min_pitch": -0.7,
+          "max_pitch": 1.3,
+          "regen_delay": 3.5,
+          "regen_per_s": 72,
+          "charge_move_mult": 0.5,
+          "self_damage_mult": 0.5,
+          "armor": 0,
+          "rear_mult": 1.5,
+          "front_arc_deg": 180,
+          "near_range_bonus": 0,
+          "vision_bonus": 0,
+          "hearing": 1
+        }
+      },
+      "mechs": [
+        {
+          "id": 106,
+          "kind": "npc",
+          "pos": [
+            159.04,
+            -68.19,
+            5.25
+          ],
+          "vel": [
+            2.42,
+            4.38,
+            0
+          ],
+          "aim": [
+            1.066,
+            0.065
+          ],
+          "hp": 55,
+          "max_hp": 350
+        },
+        {
+          "id": 109,
+          "kind": "npc",
+          "pos": [
+            128.85,
+            -21.27,
+            5.68
+          ],
+          "vel": [
+            0.73,
+            2.91,
+            0
+          ],
+          "aim": [
+            1.326,
+            0.012
+          ],
+          "hp": 299.6,
+          "max_hp": 350
+        }
+      ],
+      "events": [],
+      "zone": {
+        "center": [
+          34.59,
+          -72.48
+        ],
+        "radius": 370.9,
+        "next_center": [
+          106.42,
+          -97.38
+        ],
+        "next_radius": 240,
+        "shrink_start": 77.5,
+        "shrink_end": 97.5,
+        "dps": 35
+      },
+      "drops": [
+        {
+          "id": 20001,
+          "pos": [
+            214.86,
+            -93.59,
+            5.22
+          ],
+          "radius": 8,
+          "lands_in": 3.7,
+          "capture_s": 4,
+          "progress": 0,
+          "holder": null
+        }
+      ]
+    }
+  },
+  {
+    "name": "offense_last",
+    "source": "offense-v1-live/20261121T134857Z-1754",
+    "previous": {
+      "type": "obs",
+      "tick": 1702,
+      "t": 85.1,
+      "self": {
+        "id": 0,
+        "pos": [
+          191.36,
+          -12.49,
+          6.05
+        ],
+        "vel": [
+          0,
+          0,
+          0
+        ],
+        "aim": [
+          -2.641,
+          0
+        ],
+        "hp": 560.3,
+        "max_hp": 2060.8,
+        "energy": 61.1,
+        "max_energy": 100,
+        "grounded": true,
+        "cubes": 7,
+        "upgrades": [
+          "nanites",
+          "plating",
+          "gun_mag"
+        ],
+        "weapons": [
+          {
+            "kind": "gun",
+            "cooldown": 0,
+            "stats": {
+              "damage": 45,
+              "cooldown": 0.24,
+              "speed": 252,
+              "range": 230,
+              "spread_deg": 0.6,
+              "mag": 20,
+              "reload": 1.92
+            },
+            "ammo": 20,
+            "reload": 0
+          },
+          {
+            "kind": "laser",
+            "cooldown": 0,
+            "stats": {
+              "damage": 315,
+              "charge": 0.75,
+              "min_charge": 0.15,
+              "min_frac": 0.35,
+              "hold_s": 2,
+              "cooldown": 1.65,
+              "range": 280,
+              "pierce": 0,
+              "charge_turn_mult": 1,
+              "cookoff": 0.6
+            },
+            "charge": 0
+          }
+        ],
+        "in_zone": true,
+        "stats": {
+          "radius": 2.5,
+          "height": 9,
+          "eye_height": 10.8,
+          "muzzle_height": 9.45,
+          "hp": 1610,
+          "walk_speed": 11.7,
+          "boost_speed": 19.5,
+          "ground_accel": 58.5,
+          "air_accel": 12,
+          "gravity": 22,
+          "jump_speed": 11,
+          "jet_accel": 34,
+          "max_rise_speed": 10,
+          "step_up": 1.2,
+          "max_slope_deg": 50,
+          "energy": 100,
+          "energy_regen": 18,
+          "energy_regen_delay": 0.6,
+          "boost_drain": 17,
+          "jet_drain": 15,
+          "turn_rate": 4,
+          "pitch_rate": 3,
+          "min_pitch": -0.7,
+          "max_pitch": 1.3,
+          "regen_delay": 3.5,
+          "regen_per_s": 72,
+          "charge_move_mult": 0.5,
+          "self_damage_mult": 0.5,
+          "armor": 0,
+          "rear_mult": 1.5,
+          "front_arc_deg": 180,
+          "near_range_bonus": 0,
+          "vision_bonus": 0,
+          "hearing": 1
+        }
+      },
+      "mechs": [
+        {
+          "id": 10,
+          "kind": "mech",
+          "pos": [
+            232.97,
+            15.6,
+            11.51
+          ],
+          "vel": [
+            -4.97,
+            -3.07,
+            8.9
+          ],
+          "aim": [
+            -2.561,
+            -0.119
+          ],
+          "hp": 639.25,
+          "max_hp": 1400,
+          "cubes": 0,
+          "weapons": [
+            "gun",
+            "laser"
+          ],
+          "charging": false
+        }
+      ],
+      "events": [],
+      "zone": {
+        "center": [
+          58.79,
+          -80.87
+        ],
+        "radius": 326.8,
+        "next_center": [
+          106.42,
+          -97.38
+        ],
+        "next_radius": 240,
+        "shrink_start": 77.5,
+        "shrink_end": 97.5,
+        "dps": 35
+      },
+      "drops": [
+        {
+          "id": 20001,
+          "pos": [
+            214.86,
+            -93.59,
+            5.22
+          ],
+          "radius": 8,
+          "lands_in": 0,
+          "capture_s": 4,
+          "progress": 0,
+          "holder": null
+        }
+      ]
+    },
+    "current": {
+      "type": "obs",
+      "tick": 1704,
+      "t": 85.2,
+      "self": {
+        "id": 0,
+        "pos": [
+          191.36,
+          -12.49,
+          6.05
+        ],
+        "vel": [
+          0,
+          0,
+          0
+        ],
+        "aim": [
+          -2.641,
+          0
+        ],
+        "hp": 560.3,
+        "max_hp": 2060.8,
+        "energy": 62.9,
+        "max_energy": 100,
+        "grounded": true,
+        "cubes": 7,
+        "upgrades": [
+          "nanites",
+          "plating",
+          "gun_mag"
+        ],
+        "weapons": [
+          {
+            "kind": "gun",
+            "cooldown": 0,
+            "stats": {
+              "damage": 45,
+              "cooldown": 0.24,
+              "speed": 252,
+              "range": 230,
+              "spread_deg": 0.6,
+              "mag": 20,
+              "reload": 1.92
+            },
+            "ammo": 20,
+            "reload": 0
+          },
+          {
+            "kind": "laser",
+            "cooldown": 0,
+            "stats": {
+              "damage": 315,
+              "charge": 0.75,
+              "min_charge": 0.15,
+              "min_frac": 0.35,
+              "hold_s": 2,
+              "cooldown": 1.65,
+              "range": 280,
+              "pierce": 0,
+              "charge_turn_mult": 1,
+              "cookoff": 0.6
+            },
+            "charge": 0
+          }
+        ],
+        "in_zone": true,
+        "stats": {
+          "radius": 2.5,
+          "height": 9,
+          "eye_height": 10.8,
+          "muzzle_height": 9.45,
+          "hp": 1610,
+          "walk_speed": 11.7,
+          "boost_speed": 19.5,
+          "ground_accel": 58.5,
+          "air_accel": 12,
+          "gravity": 22,
+          "jump_speed": 11,
+          "jet_accel": 34,
+          "max_rise_speed": 10,
+          "step_up": 1.2,
+          "max_slope_deg": 50,
+          "energy": 100,
+          "energy_regen": 18,
+          "energy_regen_delay": 0.6,
+          "boost_drain": 17,
+          "jet_drain": 15,
+          "turn_rate": 4,
+          "pitch_rate": 3,
+          "min_pitch": -0.7,
+          "max_pitch": 1.3,
+          "regen_delay": 3.5,
+          "regen_per_s": 72,
+          "charge_move_mult": 0.5,
+          "self_damage_mult": 0.5,
+          "armor": 0,
+          "rear_mult": 1.5,
+          "front_arc_deg": 180,
+          "near_range_bonus": 0,
+          "vision_bonus": 0,
+          "hearing": 1
+        }
+      },
+      "mechs": [],
+      "events": [],
+      "zone": {
+        "center": [
+          59.18,
+          -81
+        ],
+        "radius": 326.1,
+        "next_center": [
+          106.42,
+          -97.38
+        ],
+        "next_radius": 240,
+        "shrink_start": 77.5,
+        "shrink_end": 97.5,
+        "dps": 35
+      },
+      "drops": [
+        {
+          "id": 20001,
+          "pos": [
+            214.86,
+            -93.59,
+            5.22
+          ],
+          "radius": 8,
+          "lands_in": 0,
+          "capture_s": 4,
+          "progress": 0,
+          "holder": null
+        }
+      ]
+    }
+  },
+  {
+    "name": "independent_v3",
+    "source": "v3-live/20261121T101822Z-1720",
+    "previous": {
+      "type": "obs",
+      "tick": 1542,
+      "t": 77.1,
+      "self": {
+        "id": 0,
+        "pos": [
+          167.16,
+          -169.56,
+          7.59
+        ],
+        "vel": [
+          8.95,
+          -0.09,
+          2.2
+        ],
+        "aim": [
+          0.417,
+          0
+        ],
+        "hp": 599.72,
+        "max_hp": 1568,
+        "energy": 61.2,
+        "max_energy": 100,
+        "grounded": false,
+        "cubes": 3,
+        "upgrades": [
+          "gun_mag",
+          "servos"
+        ],
+        "weapons": [
+          {
+            "kind": "gun",
+            "cooldown": 0,
+            "stats": {
+              "damage": 45,
+              "cooldown": 0.24,
+              "speed": 252,
+              "range": 230,
+              "spread_deg": 0.6,
+              "mag": 20,
+              "reload": 1.92
+            },
+            "ammo": 20,
+            "reload": 0
+          },
+          {
+            "kind": "lightning",
+            "cooldown": 0,
+            "stats": {
+              "damage": 60,
+              "cooldown": 0.25,
+              "range": 45,
+              "cone_deg": 30,
+              "chain": 2,
+              "chain_range": 14,
+              "chain_falloff": 0.7,
+              "energy": 3,
+              "short_s": 2
+            }
+          }
+        ],
+        "in_zone": true,
+        "stats": {
+          "radius": 2.5,
+          "height": 9,
+          "eye_height": 9.2,
+          "muzzle_height": 8.05,
+          "hp": 1400,
+          "walk_speed": 12.636,
+          "boost_speed": 21.06,
+          "ground_accel": 58.5,
+          "air_accel": 12,
+          "gravity": 22,
+          "jump_speed": 11,
+          "jet_accel": 34,
+          "max_rise_speed": 10,
+          "step_up": 1.2,
+          "max_slope_deg": 50,
+          "energy": 100,
+          "energy_regen": 18,
+          "energy_regen_delay": 0.6,
+          "boost_drain": 17,
+          "jet_drain": 15,
+          "turn_rate": 4,
+          "pitch_rate": 3,
+          "min_pitch": -0.7,
+          "max_pitch": 1.3,
+          "regen_delay": 5,
+          "regen_per_s": 45,
+          "charge_move_mult": 0.5,
+          "self_damage_mult": 0.5,
+          "armor": 0,
+          "rear_mult": 1.5,
+          "front_arc_deg": 180,
+          "near_range_bonus": 0,
+          "vision_bonus": 0,
+          "hearing": 1
+        }
+      },
+      "mechs": [
+        {
+          "id": 2,
+          "kind": "mech",
+          "pos": [
+            228.09,
+            -140.7,
+            5.04
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            -2.692,
+            0.074
+          ],
+          "hp": 1349.7,
+          "max_hp": 1848,
+          "cubes": 8,
+          "weapons": [
+            "gun",
+            "mortar"
+          ],
+          "charging": false
+        }
+      ],
+      "events": [],
+      "zone": {
+        "center": [
+          86.54,
+          -173.57
+        ],
+        "radius": 380,
+        "next_center": [
+          109.06,
+          -79.02
+        ],
+        "next_radius": 240,
+        "shrink_start": 77.5,
+        "shrink_end": 97.5,
+        "dps": 35
+      },
+      "drops": [
+        {
+          "id": 20001,
+          "pos": [
+            226.03,
+            -141.7,
+            5.08
+          ],
+          "radius": 8,
+          "lands_in": 5.4,
+          "capture_s": 4,
+          "progress": 0,
+          "holder": null
+        }
+      ]
+    },
+    "current": {
+      "type": "obs",
+      "tick": 1544,
+      "t": 77.2,
+      "self": {
+        "id": 0,
+        "pos": [
+          167.97,
+          -169.58,
+          7.64
+        ],
+        "vel": [
+          7.77,
+          -0.29,
+          0
+        ],
+        "aim": [
+          0.424,
+          0
+        ],
+        "hp": 604.22,
+        "max_hp": 1568,
+        "energy": 63,
+        "max_energy": 100,
+        "grounded": false,
+        "cubes": 3,
+        "upgrades": [
+          "gun_mag",
+          "servos"
+        ],
+        "weapons": [
+          {
+            "kind": "gun",
+            "cooldown": 0,
+            "stats": {
+              "damage": 45,
+              "cooldown": 0.24,
+              "speed": 252,
+              "range": 230,
+              "spread_deg": 0.6,
+              "mag": 20,
+              "reload": 1.92
+            },
+            "ammo": 20,
+            "reload": 0
+          },
+          {
+            "kind": "lightning",
+            "cooldown": 0,
+            "stats": {
+              "damage": 60,
+              "cooldown": 0.25,
+              "range": 45,
+              "cone_deg": 30,
+              "chain": 2,
+              "chain_range": 14,
+              "chain_falloff": 0.7,
+              "energy": 3,
+              "short_s": 2
+            }
+          }
+        ],
+        "in_zone": true,
+        "stats": {
+          "radius": 2.5,
+          "height": 9,
+          "eye_height": 9.2,
+          "muzzle_height": 8.05,
+          "hp": 1400,
+          "walk_speed": 12.636,
+          "boost_speed": 21.06,
+          "ground_accel": 58.5,
+          "air_accel": 12,
+          "gravity": 22,
+          "jump_speed": 11,
+          "jet_accel": 34,
+          "max_rise_speed": 10,
+          "step_up": 1.2,
+          "max_slope_deg": 50,
+          "energy": 100,
+          "energy_regen": 18,
+          "energy_regen_delay": 0.6,
+          "boost_drain": 17,
+          "jet_drain": 15,
+          "turn_rate": 4,
+          "pitch_rate": 3,
+          "min_pitch": -0.7,
+          "max_pitch": 1.3,
+          "regen_delay": 5,
+          "regen_per_s": 45,
+          "charge_move_mult": 0.5,
+          "self_damage_mult": 0.5,
+          "armor": 0,
+          "rear_mult": 1.5,
+          "front_arc_deg": 180,
+          "near_range_bonus": 0,
+          "vision_bonus": 0,
+          "hearing": 1
+        }
+      },
+      "mechs": [],
+      "events": [],
+      "zone": {
+        "center": [
+          86.54,
+          -173.57
+        ],
+        "radius": 380,
+        "next_center": [
+          109.06,
+          -79.02
+        ],
+        "next_radius": 240,
+        "shrink_start": 77.5,
+        "shrink_end": 97.5,
+        "dps": 35
+      },
+      "drops": [
+        {
+          "id": 20001,
+          "pos": [
+            226.03,
+            -141.7,
+            5.08
+          ],
+          "radius": 8,
+          "lands_in": 5.3,
+          "capture_s": 4,
+          "progress": 0,
+          "holder": null
+        }
+      ]
+    }
+  },
+  {
+    "name": "confirmed_kill",
+    "source": "selective-v4-live/20261121T120242Z-3ed8",
+    "previous": {
+      "type": "obs",
+      "tick": 2810,
+      "t": 140.5,
+      "self": {
+        "id": 0,
+        "pos": [
+          -22.46,
+          -109.73,
+          -0.6
+        ],
+        "vel": [
+          0,
+          13.65,
+          0
+        ],
+        "aim": [
+          -1.671,
+          -0.2
+        ],
+        "hp": 1184.5,
+        "max_hp": 2592.1,
+        "energy": 61,
+        "max_energy": 100,
+        "grounded": true,
+        "cubes": 28,
+        "upgrades": [
+          "plating",
+          "servos",
+          "servos",
+          "gun_mag",
+          "nanites",
+          "plating",
+          "gun_velocity"
+        ],
+        "weapons": [
+          {
+            "kind": "gun",
+            "cooldown": 0.23,
+            "stats": {
+              "damage": 45,
+              "cooldown": 0.24,
+              "speed": 315,
+              "range": 264.5,
+              "spread_deg": 0.6,
+              "mag": 20,
+              "reload": 1.92
+            },
+            "ammo": 13,
+            "reload": 0
+          },
+          {
+            "kind": "laser",
+            "cooldown": 0,
+            "stats": {
+              "damage": 315,
+              "charge": 0.75,
+              "min_charge": 0.15,
+              "min_frac": 0.35,
+              "hold_s": 2,
+              "cooldown": 1.65,
+              "range": 280,
+              "pierce": 0,
+              "charge_turn_mult": 1,
+              "cookoff": 0.6
+            },
+            "charge": 0
+          }
+        ],
+        "in_zone": true,
+        "stats": {
+          "radius": 2.5,
+          "height": 9,
+          "eye_height": 19.2,
+          "muzzle_height": 16.8,
+          "hp": 1851.5,
+          "walk_speed": 13.647,
+          "boost_speed": 22.745,
+          "ground_accel": 58.5,
+          "air_accel": 12,
+          "gravity": 22,
+          "jump_speed": 11,
+          "jet_accel": 34,
+          "max_rise_speed": 10,
+          "step_up": 1.2,
+          "max_slope_deg": 50,
+          "energy": 100,
+          "energy_regen": 18,
+          "energy_regen_delay": 0.6,
+          "boost_drain": 17,
+          "jet_drain": 15,
+          "turn_rate": 4,
+          "pitch_rate": 3,
+          "min_pitch": -0.7,
+          "max_pitch": 1.3,
+          "regen_delay": 3.5,
+          "regen_per_s": 72,
+          "charge_move_mult": 0.5,
+          "self_damage_mult": 0.5,
+          "armor": 0,
+          "rear_mult": 1.5,
+          "front_arc_deg": 180,
+          "near_range_bonus": 0,
+          "vision_bonus": 0,
+          "hearing": 1
+        }
+      },
+      "mechs": [
+        {
+          "id": 11,
+          "kind": "mech",
+          "pos": [
+            -29.24,
+            -162.95,
+            -1.2
+          ],
+          "vel": [
+            -7.56,
+            8.93,
+            0
+          ],
+          "aim": [
+            1.459,
+            -0.108
+          ],
+          "hp": 51.03,
+          "max_hp": 2592.1,
+          "cubes": 10,
+          "weapons": [
+            "gun",
+            "lightning"
+          ],
+          "charging": false
+        }
+      ],
+      "events": [
+        {
+          "type": "damaged",
+          "amount": 63,
+          "weapon": "gun",
+          "bearing": -1.701,
+          "by": 11
+        }
+      ],
+      "zone": {
+        "center": [
+          -87.25,
+          -165.76
+        ],
+        "radius": 140,
+        "next_center": [
+          -74.79,
+          -181.46
+        ],
+        "next_radius": 70,
+        "shrink_start": 147.5,
+        "shrink_end": 162.5,
+        "dps": 100
+      },
+      "drops": [
+        {
+          "id": 20002,
+          "pos": [
+            -37.95,
+            -152.66,
+            -0.67
+          ],
+          "radius": 8,
+          "lands_in": 0,
+          "capture_s": 4,
+          "progress": 0,
+          "holder": null
+        }
+      ]
+    },
+    "current": {
+      "type": "obs",
+      "tick": 2812,
+      "t": 140.6,
+      "self": {
+        "id": 0,
+        "pos": [
+          -22.46,
+          -108.37,
+          -0.59
+        ],
+        "vel": [
+          0,
+          13.65,
+          0
+        ],
+        "aim": [
+          -1.686,
+          -0.203
+        ],
+        "hp": 1184.5,
+        "max_hp": 2592.1,
+        "energy": 62.8,
+        "max_energy": 100,
+        "grounded": true,
+        "cubes": 28,
+        "upgrades": [
+          "plating",
+          "servos",
+          "servos",
+          "gun_mag",
+          "nanites",
+          "plating",
+          "gun_velocity"
+        ],
+        "weapons": [
+          {
+            "kind": "gun",
+            "cooldown": 0.13,
+            "stats": {
+              "damage": 45,
+              "cooldown": 0.24,
+              "speed": 315,
+              "range": 264.5,
+              "spread_deg": 0.6,
+              "mag": 20,
+              "reload": 1.92
+            },
+            "ammo": 13,
+            "reload": 0
+          },
+          {
+            "kind": "laser",
+            "cooldown": 0,
+            "stats": {
+              "damage": 315,
+              "charge": 0.75,
+              "min_charge": 0.15,
+              "min_frac": 0.35,
+              "hold_s": 2,
+              "cooldown": 1.65,
+              "range": 280,
+              "pierce": 0,
+              "charge_turn_mult": 1,
+              "cookoff": 0.6
+            },
+            "charge": 0
+          }
+        ],
+        "in_zone": true,
+        "stats": {
+          "radius": 2.5,
+          "height": 9,
+          "eye_height": 19.2,
+          "muzzle_height": 16.8,
+          "hp": 1851.5,
+          "walk_speed": 13.647,
+          "boost_speed": 22.745,
+          "ground_accel": 58.5,
+          "air_accel": 12,
+          "gravity": 22,
+          "jump_speed": 11,
+          "jet_accel": 34,
+          "max_rise_speed": 10,
+          "step_up": 1.2,
+          "max_slope_deg": 50,
+          "energy": 100,
+          "energy_regen": 18,
+          "energy_regen_delay": 0.6,
+          "boost_drain": 17,
+          "jet_drain": 15,
+          "turn_rate": 4,
+          "pitch_rate": 3,
+          "min_pitch": -0.7,
+          "max_pitch": 1.3,
+          "regen_delay": 3.5,
+          "regen_per_s": 72,
+          "charge_move_mult": 0.5,
+          "self_damage_mult": 0.5,
+          "armor": 0,
+          "rear_mult": 1.5,
+          "front_arc_deg": 180,
+          "near_range_bonus": 0,
+          "vision_bonus": 0,
+          "hearing": 1
+        }
+      },
+      "mechs": [],
+      "events": [
+        {
+          "type": "hit",
+          "target": 11,
+          "amount": 51.03,
+          "weapon": "gun"
+        },
+        {
+          "type": "kill",
+          "target": 11
+        }
+      ],
+      "zone": {
+        "center": [
+          -87.25,
+          -165.76
+        ],
+        "radius": 140,
+        "next_center": [
+          -74.79,
+          -181.46
+        ],
+        "next_radius": 70,
+        "shrink_start": 147.5,
+        "shrink_end": 162.5,
+        "dps": 100
+      },
+      "drops": [
+        {
+          "id": 20002,
+          "pos": [
+            -37.95,
+            -152.66,
+            -0.67
+          ],
+          "radius": 8,
+          "lands_in": 0,
+          "capture_s": 4,
+          "progress": 0,
+          "holder": null
+        }
+      ]
+    }
+  }
+]
