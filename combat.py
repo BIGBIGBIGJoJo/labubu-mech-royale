@@ -149,6 +149,48 @@ class Combat:
         return (abs(angle_delta(solution["aim"][0], actual_next[0])) <= yaw_tolerance
                 and pitch_low <= actual_next[1] <= pitch_high)
 
+    def _actual_ray_clear(self, muzzle, barrel_offset, aim, solution, radius, height, projectile_radius=0.0):
+        """Check the firing-time ray up to its first target-body intersection.
+
+        A clear intended head shot does not imply the currently slewing barrel
+        clears the same wall. Stop at the near body surface so walls behind the
+        target cannot incorrectly suppress a valid shot.
+        """
+        vec = direction(aim)
+        origin = [muzzle[i] + barrel_offset * vec[i] for i in range(3)]
+        if not self._clear(muzzle, origin):
+            return False
+        point = solution["point"]
+        dx, dy = origin[0] - point[0], origin[1] - point[1]
+        expanded_radius = radius + projectile_radius
+        a = vec[0] * vec[0] + vec[1] * vec[1]
+        b = 2 * (dx * vec[0] + dy * vec[1])
+        c = dx * dx + dy * dy - expanded_radius * expanded_radius
+        enter, leave = 0.0, float("inf")
+        if a < 1e-12:
+            if c > 0:
+                return False
+        else:
+            discriminant = b * b - 4 * a * c
+            if discriminant < 0:
+                return False
+            root = math.sqrt(discriminant)
+            enter = max(enter, (-b - root) / (2 * a))
+            leave = min(leave, (-b + root) / (2 * a))
+        center_z = solution.get("center_z", point[2])
+        low = center_z - height * 0.5 - projectile_radius
+        high = center_z + height * 0.5 + projectile_radius
+        if abs(vec[2]) < 1e-12:
+            if not low <= origin[2] <= high:
+                return False
+        else:
+            z_enter, z_leave = sorted(((low - origin[2]) / vec[2], (high - origin[2]) / vec[2]))
+            enter, leave = max(enter, z_enter), min(leave, z_leave)
+        if enter > leave or leave < 0 or not math.isfinite(enter):
+            return False
+        endpoint = [origin[i] + max(0.0, enter) * vec[i] for i in range(3)]
+        return self._clear(origin, endpoint)
+
     def _direct_solution(self, kind, stats, origin, center, velocity, barrel_offset, limits, target_height):
         speed = float(stats.get("speed", 252.0))
         # All shots have a small muzzle extension. Re-solve the gun intercept
@@ -368,8 +410,12 @@ class Combat:
             valid = bool(sol and sol["clear"])
             actual_next = self._slewed(actual, action["aim"], own, fire_delay[slot])
             if kind == "gun":
+                projectile_radius = self.config.get("projectile", {}).get("gun_radius", 0.3)
                 aligned = valid and self._aligned(actual_next, sol, radius, height,
-                                                  self.config.get("projectile", {}).get("gun_radius", 0.3))
+                                                  projectile_radius)
+                if aligned and ready[slot]:
+                    aligned = self._actual_ray_clear(origin, own["radius"] + 0.5, actual_next, sol,
+                                                     radius, height, projectile_radius)
                 reload_ending = 0 < weapon.get("reload", 0) <= self.action_dt + 1e-6
                 action["fire"][slot] = bool(ready[slot] and aligned and weapon.get("reload", 0) <= self.action_dt + 1e-6
                                              and (weapon.get("ammo", 1) > 0 or reload_ending) and not action["reload"])
@@ -379,6 +425,8 @@ class Combat:
                 charge = float(weapon.get("charge", 0.0))
                 full = float(stats.get("charge", 0.75))
                 aligned = valid and self._aligned(actual_next, sol, radius, height)
+                if aligned and charge > 0:
+                    aligned = self._actual_ray_clear(origin, own["radius"] + 0.5, actual_next, sol, radius, height)
                 if charge >= full - 1e-6:
                     self._full_since.setdefault(slot, now)
                 else:
@@ -397,9 +445,9 @@ class Combat:
                     action["fire"][slot] = bool(ready[slot] and valid and not emergency
                                                  and abs(angle_delta(sol["aim"][0], actual_next[0])) < 0.6)
             elif kind == "lightning":
-                # Lightning checks horizontal yaw only. The documented cone
-                # ambiguity is resolved conservatively as half the full angle.
-                cone = math.radians(stats.get("cone_deg", 30.0)) * 0.5
+                # cone_deg is the allowed deviation from aim yaw, not the
+                # full cone width (protocol: "within cone_deg ... of your aim").
+                cone = math.radians(stats.get("cone_deg", 30.0))
                 energy_reserve = 18.0 if emergency else 8.0
                 action["fire"][slot] = bool(ready[slot] and valid
                     and abs(angle_delta(sol["aim"][0], actual_next[0])) <= cone

@@ -56,6 +56,8 @@ class Bot:
         self.recent_attackers = {}
         self.resource_key = None
         self.target_id = None
+        self.failed_goals = []
+        self.goal_progress = None
 
     def stats(self, me):
         stats = {**self.config["mech"], **me.get("stats", {})}
@@ -119,6 +121,7 @@ class Bot:
                     self.loot.pop(key, None)
         self.blacklist = {k: until for k, until in self.blacklist.items() if until > t}
         self.recent_attackers = {k: seen for k, seen in self.recent_attackers.items() if t - seen < 5}
+        self.failed_goals = [(point, until) for point, until in self.failed_goals if until > t]
 
     def actor_center(self, actor):
         if actor.get("kind") == "npc":
@@ -272,6 +275,8 @@ class Bot:
                 if distance(point, center) + s["radius"] + 12 > radius:
                     continue
                 point[2] = self.map.ground_height(*point[:2])
+                if any(distance(point, failed) < 8 for failed, _ in self.failed_goals):
+                    continue
                 if not self.map.point_clear(point, s["radius"], s["height"]):
                     continue
                 cell = (int(point[0] // 35), int(point[1] // 35))
@@ -302,6 +307,8 @@ class Bot:
         for point in candidates:
             if time.perf_counter() > deadline:
                 break
+            if any(distance(point, failed) < 8 for failed, _ in self.failed_goals):
+                continue
             cost = self.position_cost(point, threats, center, radius, s["radius"], self.recover, s["muzzle_height"])
             cost += distance(point, p) * .22
             if not self.recover:
@@ -313,6 +320,26 @@ class Bot:
             r = max(0, radius - s["radius"] - 15)
             best = [center[0] + r * u[0], center[1] + r * u[1], self.map.ground_height(center[0] + r * u[0], center[1] + r * u[1])]
         return best
+
+    def check_route_progress(self, obs, goal, navigation, exposed):
+        """Retire unreachable cover instead of repeatedly choosing its endpoint."""
+        if self.mode not in ("recover", "rotate", "position"):
+            self.goal_progress = None
+            return
+        t, p = obs["t"], obs["self"]["pos"]
+        remaining = distance(p, goal)
+        tracking = self.goal_progress
+        if tracking is None or distance(goal, tracking["goal"]) > 8:
+            tracking = self.goal_progress = {"goal": list(goal), "distance": remaining, "since": t}
+        if remaining < tracking["distance"] - 2:
+            tracking.update(distance=remaining, since=t)
+        blocked = getattr(self.map, "last_route_status", None) == "unreachable"
+        holding = math.hypot(*navigation) < .1 and t - tracking["since"] >= 2
+        if remaining > 8 and (blocked or (holding and (exposed or self.mode == "rotate"))):
+            self.failed_goals.append((list(goal), t + 12))
+            self.failed_goals = self.failed_goals[-12:]
+            self.goal_until = -1
+            self.goal_progress = None
 
     def resource_goal(self, obs, threats, deadline=None):
         """Price completion time and exposure for each reachable opportunity."""
@@ -606,6 +633,7 @@ class Bot:
         allow_fire = not self.recover or imminent or active_contact
         combat = self.combat.plan(obs, target, allow_fire=allow_fire, emergency=urgent or self.recover)
         navigation = self.map.navigate(p, goal, s["radius"], s["height"], deadline=deadline - .012)
+        self.check_route_progress(obs, goal, navigation, bool(visible))
         if distance(p, goal) < 1.5:
             navigation = (0, 0)
         motion_weapons = [({**w, "charge": max(.001, w.get("charge", 0)) if combat["fire"][i] else 0}

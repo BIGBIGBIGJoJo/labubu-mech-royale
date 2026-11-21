@@ -138,3 +138,11 @@ these two placements as a controlled improvement or regression.
 - [Official starter kit](https://www.joinbuilders.org/buildathon/tracks/builders/files/mechfight-kit.tar.gz)
 - Local official-kit configuration, supplied observations, and prior private
   diagnostic traces. No other entrant's implementation was used.
+
+## Official feedback and route follow-up
+
+Commit `39b6d509af8e82b0ceb9e1c430dd964674d7488e` scored **4.75**, up from
+4.19. The 6.3 target remains unmet. The follow-up keeps the same overall strategy
+and fixes route progress and firing geometry: consume a reachable partial-path
+endpoint, abandon exhausted routes or exposed stationary frontiers, use the
+documented lightning angle, and wait for the actual gun/laser ray to clear cover.

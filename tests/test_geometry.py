@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -97,6 +98,31 @@ class GeometryTests(unittest.TestCase):
         self.assertTrue(self.map.point_clear(contact,2.5,9))
         self.assertTrue(self.map.move_clear(contact,(2.75,10,0),2.5,9))
         self.assertFalse(self.map.move_clear(contact,(4,10,0),2.5,9))
+
+    def test_unfinished_path_nearest_endpoint_is_followed(self):
+        direction=self.map._path_direction((22,30,0),[(25,30,0)],2.5,9,time.perf_counter()+1,partial=True)
+        self.assertEqual(direction,(1,0))
+
+    def test_reached_partial_frontier_does_not_reverse_toward_blocked_goal(self):
+        direction=self.map._path_direction((24.5,30,0),[(25,30,0)],2.5,9,time.perf_counter()+1,partial=True)
+        self.assertEqual(direction,(0,0))
+
+    def test_route_status_reports_exhaustion_and_resets_on_every_call(self):
+        root=self.root / "partition"
+        self.write_map(root)
+        file=root / "v2/world.json"
+        world=json.loads(file.read_text(encoding="utf-8"))
+        world["prisms"]=[{"kind":"building","base":0,"top":20,
+                          "ring":[19,0,21,0,21,40,19,40],"holes":[]}]
+        file.write_text(json.dumps(world),encoding="utf-8")
+        partition=geometry.ArenaMap(root,{"mech":{"step_up":1.2,"max_slope_deg":50}})
+        with patch.object(geometry.time,"perf_counter",return_value=100.0):
+            partition.navigate((10,20,0),(30,20,0),2.5,9,deadline=101.0)
+            self.assertEqual(partition.last_route_status,"unreachable")
+            partition.navigate((10,20,0),(12,20,0),2.5,9,deadline=101.0)
+            self.assertEqual(partition.last_route_status,"direct")
+            partition.navigate((10,20,0),(30,20,0),2.5,9,deadline=99.0)
+            self.assertEqual(partition.last_route_status,"searching")
 
     def test_match_margin_is_center_limit_without_double_counting_radius(self):
         inset=geometry.ArenaMap(self.root,{"match":{"arena_margin":5},"mech":{"step_up":1.2,"max_slope_deg":50}})

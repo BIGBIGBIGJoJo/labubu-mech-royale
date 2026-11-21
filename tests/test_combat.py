@@ -139,11 +139,43 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(action["fire"], [False, False])
 
     def test_upper_body_can_be_targeted_over_low_cover(self):
-        controller = combat.Combat(CONFIG, lambda a, b: b[2] >= 8.0)
+        def clear(a, b):
+            if min(a[0], b[0]) <= 50 <= max(a[0], b[0]) and a[0] != b[0]:
+                return a[2] + (b[2] - a[2]) * (50 - a[0]) / (b[0] - a[0]) > 7.4
+            return True
+        controller = combat.Combat(CONFIG, clear)
         obs = observation(weapon("gun"))
         action = controller.plan(obs, enemy())
         self.assertGreater(action["aim"][1], 0.0)
         self.assertTrue(action["fire"][0])
+
+    def test_laser_holds_until_actual_ray_clears_low_wall(self):
+        def clear(a, b):
+            if min(a[0], b[0]) <= 5 <= max(a[0], b[0]) and a[0] != b[0]:
+                return a[2] + (b[2] - a[2]) * (5 - a[0]) / (b[0] - a[0]) > 7.4
+            return True
+        controller = combat.Combat(CONFIG, clear)
+        obs = observation(weapon("laser", charge=0.75))
+        obs["self"]["aim"] = [0, math.atan2(4.5 - 7, 10)]
+        initial = controller.plan(obs, enemy(10))
+        self.assertTrue(initial["fire"][0])
+        obs["self"]["aim"] = controller._slewed(obs["self"]["aim"], initial["aim"], obs["self"]["stats"], 0.1)
+        obs["t"] += 0.1
+        self.assertFalse(controller.plan(obs, enemy(10))["fire"][0])
+
+    def test_gun_does_not_fire_actual_ray_into_low_wall(self):
+        def clear(a, b):
+            if min(a[0], b[0]) <= 5 <= max(a[0], b[0]) and a[0] != b[0]:
+                return a[2] + (b[2] - a[2]) * (5 - a[0]) / (b[0] - a[0]) > 7.4
+            return True
+        obs = observation(weapon("gun"))
+        obs["self"]["aim"] = [0, math.atan2(4.5 - 7, 10)]
+        self.assertFalse(combat.Combat(CONFIG, clear).plan(obs, enemy(10))["fire"][0])
+
+    def test_actual_ray_stops_at_target_before_wall_behind_it(self):
+        controller = combat.Combat(CONFIG, lambda a, b: max(a[0], b[0]) < 101)
+        self.assertTrue(controller.plan(observation(weapon("gun")), enemy(100))["fire"][0])
+        self.assertFalse(controller.plan(observation(weapon("laser", charge=0.75)), enemy(100))["fire"][0])
 
     def test_recovery_releases_laser_and_reloads_gun(self):
         obs = observation(weapon("gun", ammo=6), weapon("laser", charge=0.5))
@@ -234,6 +266,16 @@ class CombatTests(unittest.TestCase):
         self.assertTrue(controller.plan(obs, enemy(30))["fire"][0])
         obs["self"]["energy"] = 5
         self.assertFalse(controller.plan(obs, enemy(30))["fire"][0])
+
+    def test_lightning_cone_is_deviation_from_aim_not_full_width(self):
+        for degrees, expected in ((20, True), (29, True), (31, False)):
+            with self.subTest(degrees=degrees):
+                obs = observation(weapon("lightning"))
+                # Freeze yaw to test the cone boundary independently of slew.
+                obs["self"]["stats"]["turn_rate"] = 0
+                obs["self"]["aim"][0] = math.radians(degrees)
+                action = combat.Combat(CONFIG).plan(obs, enemy(30))
+                self.assertEqual(action["fire"][0], expected)
 
     def test_lightning_can_hit_low_crate_by_yaw(self):
         target = {"kind": "crate", "id": 1001, "pos": [5, 0, 0], "hp": 300}

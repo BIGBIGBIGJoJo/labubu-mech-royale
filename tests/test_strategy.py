@@ -430,6 +430,40 @@ class StrategyTests(unittest.TestCase):
         self.assertGreater(travelled_commands, 0.1,
                            "Healthy empty-area policy must search for resources or useful positions")
 
+    def test_unreachable_cover_expires_cached_goal(self):
+        self.bot.mode = "recover"
+        self.bot.goal_until = 100
+        self.bot.map.last_route_status = "unreachable"
+        self.bot.check_route_progress(self.obs, [30, 0, 0], (0, 0), True)
+        self.assertEqual(self.bot.goal_until, -1)
+        self.assertEqual(self.bot.failed_goals[0][0], [30, 0, 0])
+
+    def test_exposed_partial_route_hold_eventually_replans(self):
+        self.bot.mode = "recover"
+        self.bot.map.last_route_status = "searching"
+        self.bot.check_route_progress(self.obs, [30, 0, 0], (0, 0), True)
+        self.assertEqual(self.bot.failed_goals, [])
+        self.obs["t"] += 2.1
+        self.bot.check_route_progress(self.obs, [30, 0, 0], (0, 0), True)
+        self.assertEqual(self.bot.failed_goals[0][0], [30, 0, 0])
+
+    def test_moving_partial_route_is_not_blacklisted_for_taking_a_detour(self):
+        self.bot.mode = "recover"
+        self.bot.map.last_route_status = "searching"
+        self.bot.check_route_progress(self.obs, [30, 0, 0], (0, 1), True)
+        self.obs["t"] += 3
+        self.obs["self"]["pos"] = [0, 20, 0]
+        self.bot.check_route_progress(self.obs, [30, 0, 0], (0, 1), True)
+        self.assertEqual(self.bot.failed_goals, [])
+
+    def test_zone_rotation_hold_replans_without_visible_enemy(self):
+        self.bot.mode = "rotate"
+        self.bot.map.last_route_status = "searching"
+        self.bot.check_route_progress(self.obs, [30, 0, 0], (0, 0), False)
+        self.obs["t"] += 2.1
+        self.bot.check_route_progress(self.obs, [30, 0, 0], (0, 0), False)
+        self.assertEqual(self.bot.failed_goals[0][0], [30, 0, 0])
+
     def test_observation_is_not_mutated(self):
         self.obs["mechs"] = [self.enemy(50)]
         self.obs["pickups"] = [{"id": 8001, "kind": "laser", "pos": [1, 0, 0]}]

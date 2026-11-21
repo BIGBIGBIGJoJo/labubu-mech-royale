@@ -75,6 +75,7 @@ class ArenaMap:
         self._search = None
         self._path = []
         self._path_key = None
+        self.last_route_status = "searching"
         self._cover = []
         self._cover_bins = {}
         self._cover_dims = None
@@ -439,17 +440,38 @@ class ArenaMap:
                 return (vx,vy)
         return (0.0,0.0)
 
+    def _path_direction(self,pos,path,radius,height,deadline,partial=False):
+        if not path:
+            return None
+        nearest=min(range(len(path)),key=lambda i:(path[i][0]-pos[0])**2+(path[i][1]-pos[1])**2)
+        if partial and nearest==len(path)-1 and math.hypot(path[-1][0]-pos[0],path[-1][1]-pos[1])<1.0:
+            # Wait at the explored frontier instead of reversing toward the
+            # blocked ultimate goal while incremental A* continues.
+            return (0.0,0.0)
+        for i in range(min(len(path)-1,nearest+3),nearest-1,-1):
+            if time.perf_counter()>=deadline:
+                break
+            if math.hypot(path[i][0]-pos[0],path[i][1]-pos[1])<1.0:
+                continue
+            if self.move_clear(pos,path[i],radius,height):
+                return _direction(pos,path[i])
+        return None
+
     def navigate(self,pos,goal,radius=2.5,height=9.0,deadline=None):
         """Ground route steering, with bounded incremental A* and local avoidance."""
+        self.last_route_status="searching"
         if not self.available:
+            self.last_route_status="direct"
             return _direction(pos,goal)
         if deadline is None:
             deadline=time.perf_counter()+0.008
         if time.perf_counter()>=deadline:
             return (0.0,0.0)
         if math.hypot(goal[0]-pos[0],goal[1]-pos[1])<1.0:
+            self.last_route_status="direct"
             return (0.0,0.0)
         if math.hypot(goal[0]-pos[0],goal[1]-pos[1]) < 40 and self.move_clear(pos,goal,radius,height):
+            self.last_route_status="direct"
             return _direction(pos,goal)
         # Round clearance upward so caches never understate a growing mech.
         dims=(math.ceil(radius*2)/2,math.ceil(height*2)/2)
@@ -500,6 +522,7 @@ class ArenaMap:
                     search["g"][nxt]=new
                     search["came"][nxt]=cell
                     heapq.heappush(search["heap"],(new+self._heuristic(nxt,target),new,nxt))
+        self.last_route_status=("ready" if search["done"] else "unreachable" if not search["heap"] else "searching")
         cell=search["best"]
         path=[self._point(cell)]
         while cell in search["came"]:
@@ -507,13 +530,11 @@ class ArenaMap:
             path.append(self._point(cell))
         path.reverse()
         self._path=path
-        # Skip passed points; seek the farthest short, unobstructed waypoint.
-        nearest=min(range(len(path)),key=lambda i:(path[i][0]-pos[0])**2+(path[i][1]-pos[1])**2)
-        for i in range(min(len(path)-1,nearest+3),nearest,-1):
-            if time.perf_counter()>=deadline:
-                break
-            if self.move_clear(pos,path[i],radius,height):
-                return _direction(pos,path[i])
+        # Include the nearest point: it can be the still-unreached final point
+        # of an unfinished search, rather than a waypoint already passed.
+        direction=self._path_direction(pos,path,radius,height,deadline,partial=not search["done"])
+        if direction is not None:
+            return direction
         if (search["done"] and time.perf_counter()<deadline
                 and math.hypot(pos[0]-goal[0],pos[1]-goal[1])<40
                 and self.move_clear(pos,goal,radius,height)):
