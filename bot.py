@@ -9,6 +9,7 @@ import mechfight as mf
 from arena_map import ArenaMap
 from combat import Combat
 from tactical import TacticalPlanner
+from spacing import LightningApproach
 
 
 def distance(a, b):
@@ -32,6 +33,7 @@ class Bot:
         self.map = ArenaMap(hello["map"]["dir"], self.config)
         self.combat = Combat(self.config, self.map.line_of_fire)
         self.tactical = TacticalPlanner(self.config, self.map)
+        self.lightning_approach = LightningApproach(self.config)
         self.slot = hello["slot"]
         self.recover = False
         self.mode = "explore"
@@ -520,6 +522,7 @@ class Bot:
         me, t = obs["self"], obs["t"]
         self.spacing_boost = False
         self.update(obs)
+        self.lightning_approach.observe(obs)
         s = self.stats(me)
         threats = self.threats(obs, s)
         visible = [q for q in threats if q["los"] and q["actor"]["kind"] == "mech"]
@@ -543,6 +546,8 @@ class Bot:
             self.mode = "recover"
         else:
             self.mode = "engage" if target else "position"
+        if self.mode != "engage":
+            self.lightning_approach.reset()
         if urgent or (self.recover and not resource) or (not target and not resource):
             if self.goal is None or t >= self.goal_until or self.goal_kind != self.mode or distance(self.goal, center) > future_radius:
                 self.goal = self.safe_goal(obs, threats, s, deadline - .013)
@@ -579,7 +584,13 @@ class Bot:
             preferred = 150 if "laser" in held else 120
             if q.get("kind") == "npc":
                 preferred = 35
-            if "lightning" in held and hp > .7 and len(visible) <= 1 and q.get("kind") == "mech":
+            close = "lightning" in held and hp > .7 and len(visible) <= 1 and q.get("kind") == "mech"
+            approach = self.lightning_approach.assess(
+                obs, q, visible_count=len(visible),
+                los=any(threat["actor"]["id"] == q["id"] and threat["los"] for threat in threats))
+            if approach is not None:
+                close = approach["allowed"]
+            if close:
                 preferred = 33 if "laser" in q.get("weapons", []) else 38
             if len(visible) >= 2:
                 preferred += 35
@@ -645,6 +656,8 @@ class Bot:
                           "target": target.get("id") if target else None,
                           "recover": self.recover, "threats": len(visible), "stuck": stuck,
                           "tactical": self.tactical.last_report, "ms": (time.perf_counter() - start) * 1000}
+        if self.lightning_approach.last_report is not None:
+            self.telemetry["lightning_approach"] = self.lightning_approach.last_report
         return action
 
 
