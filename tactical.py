@@ -33,8 +33,9 @@ def pursuit_distance(config,me,target,stats,*,line_clear=True):
     Anchors are deliberate aggressive-policy parameters. Body/pitch/blast
     floors avoid common unusable close positions; Combat still checks the
     actual shot. Occluded targets are approached toward the geometric floor.
-    An already closer clear target never causes retreat solely to restore an
-    ordinary range anchor. This function performs no geometry queries.
+    Gun-only mech engagements restore the ordinary anchor if the target closes.
+    Other loadouts and NPCs retain their closer clear-target preference. This
+    function performs no geometry queries.
     """
     weapons=[w for w in me.get("weapons",[])[:2] if w]
     live={w["kind"]:{**config.get("weapons",{}).get(w["kind"],{}),
@@ -71,6 +72,8 @@ def pursuit_distance(config,me,target,stats,*,line_clear=True):
     if lightning and me.get("energy",0)>=lightning.get("energy",3.0)+8.0:
         anchor=min(anchor,max(0.0,lightning.get("range",45.0)-6.0))
     distance=math.hypot(me["pos"][0]-target["pos"][0],me["pos"][1]-target["pos"][1])
+    if line_clear and target.get("kind")=="mech" and len(weapons)==1 and "gun" in live:
+        return max(minimum,anchor)
     return max(minimum,min(anchor,distance)) if line_clear else minimum
 
 

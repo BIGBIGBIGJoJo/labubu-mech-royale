@@ -6,7 +6,10 @@ when health is low and no enemy is nearby. The user explicitly selected equal
 treatment of enemy mechs and NPC drones, and current weapon reach as the meaning
 of nearby. The official target remains **6.0**; the best verified score is 4.75.
 
-This candidate starts from exact best source `39b6d50`. The first-magazine and
+The initial pursuit candidate started from exact best source `39b6d50`. It
+scored 4.21 as `919f826`; the current isolated spacing follow-up starts from
+that pursuit commit. The best 4.75 entry remains selected. SPACING_PLAN.md
+describes the gun-only versus mech spacing revision. The first-magazine and
 drop-memory experiments scored 4.58 and 4.63 and are not included. A later NPC
 farming experiment was not submitted; its optional search was starved of time
 in real opening replays. That experiment remains separate from this pursuit

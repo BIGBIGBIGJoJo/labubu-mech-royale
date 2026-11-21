@@ -27,9 +27,10 @@ checker inside Linux with the arena mounted; preflight confirms map loading.
 | BB-152A342F | a237d0beb3bbb1ad47c059d233bbf9f868d3408f | 4.60 | Accepted; movement correction did not improve official score |
 | BB-0962E9D9 | 005e830f22800cb32b5c9bbca94a99e0e1fae47d | 4.58 | Accepted; first-magazine preference did not improve official score |
 | BB-622AA903 | f0609d61c0d199a7311c0338abc912345fc14145 | 4.63 | Accepted; drop-contestation memory did not improve official score |
+| BB-C938CB71 | 919f826b217691b18842baace9ea0e2dd7cdd499 | 4.21 | Accepted; nearest-pursuit policy did not improve official score |
 
 The strategy-v2 candidate improved 4.19 to 4.75 (approximately 13.4%).
-Thirteen submissions have been accepted. The hourly quota replenishes over time;
+Fourteen submissions have been accepted. The hourly quota replenishes over time;
 check the authenticated panel before any further attempt.
 
 The automatically selected entry is the commit above; this is **not** a claim
@@ -45,7 +46,7 @@ aggressive play. The first aggressive implementation scored 4.63; none of the
 selective scores measures it. The current design is in PROGRAM_DESIGN.md and
 the three current strategy-agent plans. The 6.0 target remains unmet.
 
-## Current candidate: nearest-enemy pursuit
+## Nearest-enemy pursuit: completed experiment
 
 The user updated the objective to fast nearest-enemy pursuit, maximum available
 firepower, optional reloads when no enemy is nearby, and low-health recovery
@@ -93,7 +94,59 @@ The first unbounded visibility revision exceeded 50 ms in five of 200 dense
 cases, with a maximum 99.13 ms. The final revision budgets visibility work
 between map rays while preserving all actors and conservative unknown handling.
 The budget cannot preempt an individual ray; measured passing samples are not
-a universal real-time guarantee. No official pursuit score is available yet.
+a universal real-time guarantee. The official pursuit result is **4.21** (BB-C938CB71); the selected best remains **4.75**. The 6.0 target is unmet.
+
+## Additional pursuit diagnostics
+
+Two further frozen-source private matches checked the resource-acquisition and
+quiet-healing concern. They ended seventh (zero kills/cubes) and third (three
+kills, fourteen cubes, gun plus laser). Both took zero zone damage. There were
+2,015 actions, seven skipped online observations, zero policy errors and zero
+decisions above 50 ms; maximum computation was 32.70 ms.
+
+Across these actions, the audit found no recovery while near, no near-enemy
+partial-reload admissions, no resource override during pursuit and no incomplete
+proximity decisions. The seventh-place run regained 1,035 HP in a quiet recovery
+interval. In the third-place run, thirteen of fourteen cubes were acquired with
+no pursuit target, and one was incidental at a combat transition; quiet looting
+also acquired lightning and then laser. Thus resource collection and healing
+work in quiet windows. The concern is lost resource opportunities during
+continuous pursuit, not universal resource denial. Random private results do
+not establish an official score improvement.
+
+## Current candidate: gun-only combat spacing
+
+This isolated follow-up starts at submitted pursuit commit `919f826` (4.21),
+with `39b6d50` (4.75) still retained as the official best. It restores the existing
+70 m gun preference against mechs when only the gun is held, so a close enemy
+does not erase that movement preference. NPC, multiple-weapon and occluded
+approach behavior stays at pursuit-v1. Target ordering, combat, reload and
+healing contracts are unchanged. See SPACING_PLAN.md for the hypothesis,
+conditional replay evidence and validation; no score benefit is established.
+
+Frozen tactical SHA256 is
+`cdbf955645840bc3c36d49861410172225d7962d35dcc9b53548526a47278491`.
+The only executable runtime difference from pursuit-v1 is the two-line anchor
+restoration in tactical.py. The final source passes **224 tests**. Host stress
+completed **580 valid decisions**, none above 50 ms, maximum 31.20 ms.
+
+The restricted real-map Linux checker returned **300/300 replies on time**,
+with zero missing, late, stale, wrong-tick or invalid replies. Ready took
+2,912 ms; p50 10.5 ms, p90 23.7 ms, p99 27.8 ms, maximum 30.6 ms. The checker
+and bot shared one CPU and 512 MB under the documented isolation limits.
+Same-image preflight confirmed 259 map prisms and 774,680 terrain samples.
+
+The frozen private integration match ended **15th, zero kills and zero cubes**,
+last observed at 22.8 seconds. It dealt 877.5 damage and took 1,375.74 observed
+damage, including 995.4 laser damage from its final gun-and-laser opponent;
+zone damage was zero. There were 224 actions, five skipped online observations,
+zero policy errors and zero decisions above 50 ms; maximum computation was
+25.43 ms. Twenty clear-mech frames exercised the restored preference below
+70 m (minimum observed target distance 64.45 m). A trace audit found no nearest,
+reload, healing or pursuit/resource contract violations; all source hashes
+matched. One nearby assessment was incomplete and conservatively treated as
+nearby. This adverse random result is retained; it does not establish an
+official improvement or isolate a causal effect of the spacing change.
 
 ## NPC farming range (historical, unsubmitted experiment)
 

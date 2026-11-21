@@ -37,8 +37,8 @@ class PursuitMovementTests(unittest.TestCase):
         self.assertEqual(self.distance(),80)
         self.assertEqual(self.distance(self.actor('npc')),35)
 
-    def test_clear_closer_enemy_does_not_restore_distant_spacing(self):
-        self.assertEqual(self.distance(self.actor(distance=45)),45)
+    def test_only_gun_only_mech_restores_closer_clear_spacing(self):
+        self.assertEqual(self.distance(self.actor(distance=45)),70)
         self.me['weapons'][1]=self.weapon('laser')
         self.assertEqual(self.distance(self.actor(distance=45)),45)
 
