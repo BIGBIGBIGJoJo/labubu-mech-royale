@@ -186,6 +186,11 @@ class Bot:
                   "laser_damage": 79, "laser_charge": 75, "laser_pierce": 31,
                   "lightning_efficiency": 79, "lightning_range": 80, "lightning_chain": 43,
                   "mortar_reload": 58, "mortar_splash": 62, "mortar_velocity": 49}
+        gun = next((w for w in me["weapons"] if w and w["kind"] == "gun"), None)
+        base_mag = self.config["weapons"]["gun"]["mag"]
+        if (gun and "gun_mag" not in me.get("upgrades", ())
+                and gun.get("stats", {}).get("mag", base_mag) <= base_mag):
+            scores["gun_mag"] = 90
         if me["hp"] / me["max_hp"] < .45:
             scores["plating"] += 17
         if "lightning" in kinds:

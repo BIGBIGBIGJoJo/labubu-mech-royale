@@ -13,10 +13,11 @@ from stdin and flushes one action per newest observation to stdout.
 python -u bot.py
 python check/check.py -- python -u bot.py
 docker build --platform linux/amd64 -t labubu-mech-royale .
-python check/check.py --map-dir /arena -- docker run --rm -i --network none --cpus 1 --memory 512m --memory-swap 512m --pids-limit 128 --read-only --tmpfs /tmp:rw,size=64m --user 65534:65534 -v "$PWD/arena:/arena:ro" labubu-mech-royale
+docker run --rm -i --network none --cpus 1 --memory 512m --memory-swap 512m --pids-limit 128 --read-only --tmpfs /tmp:rw,size=64m --user 65534:65534 --entrypoint python3 -v "${PWD}/arena:/arena:ro" -v "${PWD}/check:/check:ro" -v "${PWD}/mechfight.schema.json:/schema.json:ro" labubu-mech-royale /check/check.py --schema /schema.json --map-dir /arena -- python3 -u /bot/bot.py
 ```
 
-On PowerShell, use `-v "${PWD}/arena:/arena:ro"` for the mount argument.
+Run from the repository root. The checker runs inside Linux so `/arena` is
+not rewritten as a Windows path; checker and bot share the container limits.
 The checker replays recorded observations. Passing it confirms protocol
 conformance; it does **not** establish a gameplay score.
 
@@ -24,7 +25,11 @@ conformance; it does **not** establish a gameplay score.
 
 See [DESIGN.md](DESIGN.md) for the competition requirements, strategy,
 implementation plan, limits, and evaluation process.
-See [STRATEGY_V2.md](STRATEGY_V2.md) for the 6.3 target, evidence, and next design.
+The current target is **6.0**. See [PROGRAM_DESIGN.md](PROGRAM_DESIGN.md) for the
+current movement, fire and orchestration plans, and [FIRST_MAGAZINE_PLAN.md](FIRST_MAGAZINE_PLAN.md)
+for the isolated first-magazine experiment on the retained 4.75 baseline.
+[STRATEGY_V2.md](STRATEGY_V2.md) is a historical design document; its earlier 6.3
+target is superseded. [VALIDATION.md](VALIDATION.md) preserves every official result.
 
 - `bot.py`: strategy, recovery, upgrades, resource completion, and zone prediction.
 - `arena_map.py`: spatial index, terrain, solid geometry, bounded navigation.
