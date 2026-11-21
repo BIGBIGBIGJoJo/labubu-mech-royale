@@ -88,6 +88,53 @@ class StrategyTests(unittest.TestCase):
         enemy.update(values)
         return enemy
 
+    def test_navigation_intent_detects_repeated_neutral_fallback_without_forcing_escape(self):
+        self.obs['self']['in_zone']=False
+        def fallback(*args, **kwargs):
+            self.bot.tactical.last_report={'fallback':True}
+            return (0.0,0.0),False
+        with patch.object(self.bot.tactical,'choose',side_effect=fallback):
+            for i in range(21):
+                self.obs.update(t=20+i*.1,tick=400+2*i)
+                action=self.bot.act(self.obs)
+        self.assertTrue(self.bot.telemetry['planner_stalled'])
+        self.assertFalse(self.bot.telemetry['stuck'])
+        self.assertGreater(math.hypot(*self.bot.telemetry['navigation']),.6)
+        self.assertEqual(action['move'],[0.0,0.0])
+        self.assertFalse(action['jump'])
+        self.assertFalse(self.bot.blacklist)
+        # An observed displacement clears the failure even if the next decision
+        # still falls back; a newly selected goal alone would not prove progress.
+        self.obs['self']['pos']=[3,0,0]
+        self.obs.update(t=22.1,tick=442)
+        with patch.object(self.bot.tactical,'choose',side_effect=fallback):
+            self.bot.act(self.obs)
+        self.assertFalse(self.bot.telemetry['planner_stalled'])
+
+    def test_deliberately_selected_braking_is_not_geometry_starvation(self):
+        self.obs['self']['in_zone']=False
+        def brake(*args, **kwargs):
+            self.bot.tactical.last_report={'fallback':False}
+            return (0.0,0.0),False
+        with patch.object(self.bot.tactical,'choose',side_effect=brake):
+            for i in range(21):
+                self.obs.update(t=20+i*.1,tick=400+2*i)
+                self.bot.act(self.obs)
+        self.assertFalse(self.bot.telemetry['planner_stalled'])
+
+    def test_duplicate_and_reversed_time_cannot_reuse_stall_history(self):
+        self.bot.last_navigation=(1,0)
+        self.bot.last_neutral_fallback=True
+        for i in range(21):
+            self.obs.update(t=20+i*.1,tick=400+2*i)
+            self.bot.update(self.obs)
+        before=len(self.bot.navigation_history)
+        self.bot.update(self.obs)
+        self.assertEqual(len(self.bot.navigation_history),before)
+        self.obs['t']=1
+        self.bot.update(self.obs)
+        self.assertEqual(len(self.bot.navigation_history),1)
+
     def test_zone_hold_and_crossing_shrink_start(self):
         self.obs["t"] = 40
         self.obs["zone"]["next_center"] = [50, 0]
@@ -438,16 +485,22 @@ class StrategyTests(unittest.TestCase):
         self.assertEqual(self.obs, before)
 
     def test_expired_tactical_budget_keeps_clear_navigation(self):
+        self.bot.tactical.last_report={'fallback':True}
+        self.bot.tactical._recovery_origin=(0,0)
         move, boost = self.bot.movement(self.obs, (1, 0), [], self.bot.stats(self.obs["self"]),
                                        False, time.perf_counter() - 1)
         self.assertGreater(move[0], 0.9,
                            "Exhausting tactical search time must not erase a safe navigation direction")
+        self.assertFalse(self.bot.tactical.last_report['fallback'])
+        self.assertIsNone(self.bot.tactical._recovery_origin)
 
     def test_expired_tactical_budget_does_not_walk_into_obstruction(self):
+        self.bot.tactical.last_report={'fallback':False}
         with patch.object(self.bot.map, "move_clear", return_value=False):
             move, boost = self.bot.movement(self.obs, (1, 0), [], self.bot.stats(self.obs["self"]),
                                            False, time.perf_counter() - 1)
         self.assertEqual(tuple(move), (0, 0))
+        self.assertTrue(self.bot.tactical.last_report['fallback'])
 
 
 if __name__ == "__main__":

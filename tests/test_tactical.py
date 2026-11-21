@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import time
 import unittest
+from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -117,9 +118,11 @@ class TacticalTests(unittest.TestCase):
         self.assertGreater(self.planner._zone_cost(path,self.obs,self.stats),10)
 
     def test_expired_budget_returns_finite_braking_action(self):
+        self.planner._recovery_origin=(0,0)
         direction,boost=self.planner.choose(self.obs,(1,0),[],self.stats,deadline=time.perf_counter()-1)
         self.assertEqual(direction,(0,0))
         self.assertFalse(boost)
+        self.assertIsNone(self.planner._recovery_origin)
 
     def test_unobstructed_goal_makes_progress(self):
         direction,boost=self.planner.choose(self.obs,(1,0),[],self.stats,goal=[50,0,0],deadline=time.perf_counter()+1)
@@ -128,6 +131,81 @@ class TacticalTests(unittest.TestCase):
     def test_current_occlusion_does_not_reduce_intrinsic_strength(self):
         actor={'id':3,'kind':'mech','pos':[50,0,0],'weapons':['gun'],'cubes':0}
         self.assertGreater(self.planner._strength(actor,50),self.planner._strength(actor,150))
+
+    def test_expensive_failed_boost_cannot_repeatedly_starve_legal_walk(self):
+        clock=[100.0]
+        class ExpensiveWall(FlatMap):
+            def move_clear(self,start,end,radius,height):
+                clock[0]+=.00065
+                return max(start[0],end[0])<=7.0
+        self.planner.map=ExpensiveWall()
+        with patch('tactical.time.perf_counter',side_effect=lambda:clock[0]):
+            first=self.planner.choose(self.obs,(1,0),[],self.stats,goal=[50,0,0],urgent=True)
+            self.assertEqual(first,((0.0,0.0),False))
+            self.assertTrue(self.planner.last_report['fallback'])
+            for i in range(3):
+                self.obs['t']+=.1
+                started=clock[0]
+                direction,boost=self.planner.choose(self.obs,(1,0),[],self.stats,goal=[50,0,0],urgent=True)
+                self.assertEqual(direction,(1.0,0.0))
+                self.assertFalse(boost)
+                self.assertTrue(self.planner.last_report['walk_checked_first'])
+                self.assertFalse(self.planner.last_report['fallback'])
+                self.assertLess(clock[0]-started,.014)
+
+    def test_navigation_recovery_ends_after_observed_progress(self):
+        self.planner._recovery_origin=(0,0)
+        self.me['pos']=[1.4,0,0]
+        self.planner.choose(self.obs,(1,0),[],self.stats,goal=[50,0,0])
+        self.assertFalse(self.planner.last_report['navigation_recovery'])
+
+    def test_navigation_recovery_ends_when_destination_is_reached(self):
+        self.planner._recovery_origin=(0,0)
+        self.planner.choose(self.obs,(0,0),[],self.stats,goal=[0,0,0])
+        self.assertFalse(self.planner.last_report['navigation_recovery'])
+
+    def test_navigation_recovery_uses_changed_intent_not_previous_direction(self):
+        self.planner._recovery_origin=(0,0)
+        self.planner.last_direction=(1,0)
+        checked=[]
+        original=self.planner._geometry
+        def capture(*args,**kwargs):
+            checked.append(args[3])
+            return original(*args,**kwargs)
+        with patch.object(self.planner,'_geometry',side_effect=capture):
+            self.planner.choose(self.obs,(0,1),[],self.stats,goal=[0,50,0],urgent=True)
+        self.assertEqual(checked[0],(0,1))
+
+    def test_validated_stop_clears_navigation_recovery(self):
+        self.planner._recovery_origin=(0,0)
+        self.obs['zone'].update(radius=3,next_radius=3,shrink_start=5,shrink_end=5.6,dps=10000)
+        direction,boost=self.planner.choose(self.obs,(1,0),[],self.stats,goal=[50,0,0])
+        self.assertEqual(direction,(0,0))
+        self.assertFalse(self.planner.last_report['fallback'])
+        self.assertIsNone(self.planner._recovery_origin)
+
+    def test_recovery_does_not_bypass_collision_with_momentum_or_charging(self):
+        for energy,charging in ((0,False),(100,False),(100,True)):
+            with self.subTest(energy=energy,charging=charging):
+                self.planner=TacticalPlanner(self.config,WallMap())
+                self.planner._recovery_origin=(0,0)
+                self.me['vel']=[19.5,0,0]
+                self.me['energy']=energy
+                self.me['weapons'][1]={'kind':'laser','charge':.2} if charging else None
+                direction,boost=self.planner.choose(self.obs,(1,0),[],self.stats,goal=[50,0,0])
+                if not self.planner.last_report['fallback']:
+                    path=self.planner.rollout(self.me,direction,boost,self.stats)
+                    self.assertIsNotNone(self.planner._geometry(path,self.stats,time.perf_counter()+1,
+                                                               direction,boost,charging))
+                else:
+                    self.assertEqual(direction,(0,0))
+                    self.assertFalse(boost)
+
+    def test_recovery_walk_with_known_projectile_risk_is_not_promoted_over_braking(self):
+        self.planner._recovery_origin=(0,0)
+        self.obs['projectiles']=[{'kind':'gun','pos':[15,0,4.5],'vel':[-15,0,0]}]
+        self.planner.choose(self.obs,(1,0),[],self.stats,goal=[50,0,0],urgent=True)
+        self.assertFalse(self.planner.last_report['walk_checked_first'])
 
 
 if __name__=='__main__':

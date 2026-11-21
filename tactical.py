@@ -36,6 +36,11 @@ class TacticalPlanner:
         self.horizon=self.steps*self.dt
         self.last_direction=(0.0,0.0)
         self.last_report={}
+        self._recovery_origin=None
+        self._last_time=-float("inf")
+
+    def reset_navigation_recovery(self):
+        self._recovery_origin=None
 
     def rollout(self,me,direction,boost,stats):
         """Return states (t,x,y,z,vx,vy,vz,energy,grounded) at physics boundaries."""
@@ -308,11 +313,23 @@ class TacticalPlanner:
         begin=time.perf_counter()
         deadline=min(deadline if deadline is not None else begin+.014,begin+.014)-.0015
         if deadline<=begin:
+            self.reset_navigation_recovery()
             self.last_report={"ms":(time.perf_counter()-begin)*1000,"candidates":0,
                               "geometry_checked":0,"projectiles":0,"fallback":True}
             return (0.0,0.0),False
         me=obs["self"]
         nav=unit(*navigation)
+        # Retry ordinary walking first only after geometry starvation. Keep the
+        # request until the observed body actually makes progress, rather than
+        # clearing it merely because we issued a nonzero command.
+        if (nav==(0.0,0.0) or not me.get("grounded",True)
+                or obs["t"]<self._last_time
+                or (self._recovery_origin is not None
+                    and math.hypot(me["pos"][0]-self._recovery_origin[0],
+                                   me["pos"][1]-self._recovery_origin[1])>=1.3)):
+            self._recovery_origin=None
+        self._last_time=obs["t"]
+        recovery=self._recovery_origin is not None
         angle=math.atan2(nav[1],nav[0])
         directions=[nav,self.last_direction,(0.0,0.0)]
         directions.extend((math.cos(angle+a),math.sin(angle+a)) for a in (.35,-.35,.7,-.7,1.1,-1.1,1.57,-1.57,2.2,-2.2,math.pi))
@@ -356,6 +373,17 @@ class TacticalPlanner:
             if time.perf_counter()>=cheap_deadline:
                 break
         ranked.sort(key=lambda item:item[0])
+        recovery_candidate=None
+        if recovery:
+            walk=next((item for item in ranked if item[1]==nav and not item[2]),None)
+            brake=next((item for item in ranked if item[1]==(0.0,0.0)),None)
+            if walk is not None and brake is not None and walk[0]<brake[0]:
+                # A boost may fail near the end of an expensive sweep and
+                # consume the whole budget before this legal walk is reached.
+                # Change validation order, not physics, horizon or risk costs.
+                ranked.remove(walk)
+                ranked.insert(0,walk)
+                recovery_candidate=walk
         best=None
         checked=0
         # Exact geometry and incoming LOS are reserved for promising candidates.
@@ -381,9 +409,16 @@ class TacticalPlanner:
             # A neutral intention brakes under the same acceleration limit. It
             # is the bounded fallback; no unvalidated wall traversal is issued.
             result=((0.0,0.0),False)
+            if checked and nav!=(0.0,0.0) and me.get("grounded",True) and self._recovery_origin is None:
+                self._recovery_origin=tuple(me["pos"][:2])
         else:
             result=(best[1],best[2])
             self.last_direction=best[1]
+            if best[1]==(0.0,0.0):
+                # A validated intentional stop ends this failure episode.
+                self._recovery_origin=None
         self.last_report={"ms":(time.perf_counter()-begin)*1000,"candidates":len(ranked),
-                          "geometry_checked":checked,"projectiles":len(tracks),"fallback":best is None}
+                          "geometry_checked":checked,"projectiles":len(tracks),"fallback":best is None,
+                          "navigation_recovery":recovery,
+                          "walk_checked_first":recovery_candidate is not None and checked>0}
         return result

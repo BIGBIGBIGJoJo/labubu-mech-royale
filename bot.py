@@ -44,6 +44,9 @@ class Bot:
         self.damage_bearing = None
         self.last_jump = -100.0
         self.history = deque()
+        self.navigation_history = deque(maxlen=64)
+        self.last_navigation = (0.0, 0.0)
+        self.last_neutral_fallback = False
         self.loot = {}
         self.blacklist = {}
         self.last_move = (0.0, 0.0)
@@ -103,6 +106,12 @@ class Bot:
         self.history.append((t, tuple(me["pos"]), math.hypot(*self.last_move)))
         while self.history and self.history[0][0] < t - 2.0:
             self.history.popleft()
+        if self.navigation_history and t < self.navigation_history[-1][0]:
+            self.navigation_history.clear()
+        if not self.navigation_history or t > self.navigation_history[-1][0]:
+            self.navigation_history.append((t, tuple(me["pos"]), math.hypot(*self.last_navigation), self.last_neutral_fallback))
+        while self.navigation_history and self.navigation_history[0][0] < t - 2.0:
+            self.navigation_history.popleft()
         for category in ("cubes", "pickups", "crates"):
             current = {item["id"] for item in obs.get(category, [])}
             for item in obs.get(category, []):
@@ -505,9 +514,16 @@ class Bot:
     def movement(self, obs, navigation, threats, s, urgent, deadline, goal=None):
         if time.perf_counter() >= deadline:
             # Keep a short verified route if optional tactical work has expired.
+            self.tactical.reset_navigation_recovery()
+            started = time.perf_counter()
             path = self.tactical.rollout(obs["self"], navigation, False, s)[:4]
-            if all(self.map.move_clear(a[1:4], b[1:4], s["radius"], s["height"])
-                   for a, b in zip(path, path[1:])):
+            clear = all(self.map.move_clear(a[1:4], b[1:4], s["radius"], s["height"])
+                        for a, b in zip(path, path[1:]))
+            self.tactical.last_report = {"ms": (time.perf_counter() - started) * 1000,
+                                         "candidates": 1, "geometry_checked": 1,
+                                         "projectiles": 0, "fallback": not clear,
+                                         "overall_deadline": True}
+            if clear:
                 return navigation, False
             return (0.0, 0.0), False
         return self.tactical.choose(obs, navigation, threats, s, goal=goal,
@@ -614,6 +630,11 @@ class Bot:
         motion_obs = {**obs, "self": {**me, "weapons": motion_weapons}}
         move, boost = self.movement(motion_obs, navigation, threats, s, urgent, deadline, goal)
         stuck = bool(len(self.history) > 8 and t - self.history[0][0] > 1.3 and distance(p, self.history[0][1]) < 1.3 and sum(h[2] for h in self.history) > len(self.history) * .6)
+        intent = self.navigation_history
+        planner_stalled = bool(len(intent) > 8 and t - intent[0][0] > 1.3
+                               and distance(p, intent[0][1]) < 1.3
+                               and sum(h[2] for h in intent) > len(intent) * .6
+                               and sum(h[3] for h in intent) > len(intent) * .6)
         jump = False
         if stuck:
             if resource:
@@ -641,9 +662,12 @@ class Bot:
             action["pick"] = upgrade
         action.update(self.take_weapon(obs))
         self.last_move = move
+        self.last_navigation = navigation
+        self.last_neutral_fallback = bool(math.hypot(*move) < .1 and self.tactical.last_report.get("fallback", False))
         self.telemetry = {"mode": self.mode, "goal": goal, "resource": self.resource_key,
                           "target": target.get("id") if target else None,
                           "recover": self.recover, "threats": len(visible), "stuck": stuck,
+                          "navigation": list(navigation), "planner_stalled": planner_stalled,
                           "tactical": self.tactical.last_report, "ms": (time.perf_counter() - start) * 1000}
         return action
 
