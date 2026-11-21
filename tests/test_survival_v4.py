@@ -102,12 +102,13 @@ class SurvivalV4Tests(unittest.TestCase):
         self.obs["self"]["energy"] = 52.29
         self.assertFalse(self.bot.lightning_commit(self.obs, target, 1))
 
-    def test_energy_gate_changes_defensive_spacing_without_authorizing_pursuit(self):
+    def test_energy_loss_changes_close_pursuit_to_ranged_retreat(self):
         self.obs["self"]["weapons"][1] = self.weapon("lightning")
         self.obs["mechs"] = [self.enemy(70, hp=900)]
         self.obs["events"] = [{"type": "damaged", "amount": 45, "weapon": "gun", "by": 5}]
         self.bot.act(self.obs)
-        self.assertLessEqual(self.bot.telemetry["goal"][0], 0)
+        self.assertGreater(self.bot.telemetry["goal"][0], 0,
+                           "A healthy energy budget permits the favorable lightning approach")
         self.obs.update(t=20.1, tick=402)
         self.obs["self"]["energy"] = 52.29
         self.bot.act(self.obs)

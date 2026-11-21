@@ -1,15 +1,15 @@
-"""Integration checks for user-authorized farming, defense, and safe finishes.
+"""Actual Bot integration for proactive combat, economy and escape priorities.
 
-Real Engagement evidence and Bot.act are used. A controlled safety assessment
-isolates per-target authorization; geometry/safety has a separate test suite.
+Uses official observations/configuration and a flat arena to isolate decisions.
+No combat outcome is simulated; real-map geometry/timing has separate checks.
 """
 import copy
 import math
-from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 import test_strategy as fixtures
+from engagement import AggressiveEngagement
 
 
 class OrchestrationTests(unittest.TestCase):
@@ -21,46 +21,9 @@ class OrchestrationTests(unittest.TestCase):
     weapon = fixtures.StrategyTests.weapon
     enemy = fixtures.StrategyTests.enemy
 
-    def assessment(self, allowed=(), budget=2.0):
-        ids = set(allowed)
-        return SimpleNamespace(
-            allows=lambda actor: actor.get("kind") == "mech" and actor["id"] in ids,
-            budget_s=budget if ids else 0.0,
-            reasons=() if ids else ("test_safety_veto",))
-
-    def act_with_safety(self, allowed=()):
-        with patch.object(self.bot.finish_safety, "evaluate",
-                          return_value=self.assessment(allowed)):
-            return self.bot.act(self.obs)
-
     def attacked(self, actor_id, weapon="gun", amount=45):
         self.obs["events"] = [{"type": "damaged", "by": actor_id,
                                "weapon": weapon, "amount": amount, "bearing": 0}]
-
-    def existing_fight(self):
-        self.obs["mechs"] = [self.enemy(100, id=5, hp=40),
-                              self.enemy(100, 20, id=6, hp=70)]
-        # An attributed beam can be visible even when its shooter is not.
-        self.obs["beams"] = [
-            {"by": 9, "kind": "lightning", "age": .1,
-             "path": [[130, 40, 7], [100, 0, 4.5]]},
-            {"by": 9, "kind": "lightning", "age": .1,
-             "path": [[130, 40, 7], [100, 20, 4.5]]},
-        ]
-
-    def assert_no_enemy_fire(self, action):
-        self.assertFalse(self.bot.telemetry["allow_fire"])
-        self.assertEqual(action["fire"], [False, False])
-        self.assertIsNone(self.bot.telemetry["target"])
-
-    def enter_finish(self, evidence_age=.1):
-        self.obs["self"]["weapons"] = [self.weapon("gun"), self.weapon("laser")]
-        self.obs["mechs"] = [self.enemy(100, id=5, hp=150)]
-        self.obs["beams"] = [{"by":9,"kind":"lightning","age":evidence_age,
-                               "path":[[130,10,7],[100,0,4.5]]}]
-        action = self.act_with_safety([5])
-        self.assertEqual(self.bot.state, "FINISH")
-        return action
 
     def advance_frame(self, seconds):
         self.obs["t"] += seconds
@@ -68,382 +31,405 @@ class OrchestrationTests(unittest.TestCase):
         self.obs["beams"] = []
         self.obs["events"] = []
 
-    def test_bot_explicitly_enables_reviewed_engagement_policy(self):
-        self.assertIsNotNone(self.bot.engagement.experimental)
-        self.assertTrue(self.bot.engagement.experimental.finish_commitment)
+    def assert_no_trigger(self, action):
+        self.assertFalse(self.bot.telemetry["allow_fire"])
+        self.assertEqual(action["fire"], [False, False])
 
-    def test_fresh_attackers_share_defensive_lightning_permission(self):
-        self.obs["self"]["weapons"] = [self.weapon("gun"), self.weapon("lightning")]
-        self.obs["mechs"] = [self.enemy(30,id=5,hp=500), self.enemy(40,id=6,hp=1000)]
-        self.obs["events"] = [{"type":"damaged","by":actor_id,"weapon":"gun",
-                                "amount":45,"bearing":0} for actor_id in (5,6)]
-        action = self.act_with_safety()
-        self.assertEqual(self.bot.state, "DEFEND")
+    def test_bot_explicitly_uses_aggressive_selector(self):
+        self.assertIsInstance(self.bot.engagement, AggressiveEngagement)
+
+    def test_first_attack_needs_no_damage_or_fight_evidence(self):
+        self.obs["mechs"] = [self.enemy(100, hp=40)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.state, "ATTACK")
         self.assertEqual(self.bot.telemetry["target"], 5)
-        self.assertEqual(self.bot.telemetry["engagement"]["authorized_ids"], [5,6])
-        self.assertTrue(action["fire"][1],
-                        "Both chain recipients independently attacked us")
+        self.assertTrue(action["fire"][0])
+        self.assertEqual(self.bot.telemetry["engagement"]["authorized_ids"], [5])
 
-    def test_quiet_third_mech_stays_protected_among_fresh_attackers(self):
-        self.obs["self"]["weapons"] = [self.weapon("gun"), self.weapon("lightning")]
-        self.obs["mechs"] = [self.enemy(30,id=5,hp=500), self.enemy(40,id=6,hp=1000),
-                              self.enemy(50,id=7,hp=20)]
-        self.obs["events"] = [{"type":"damaged","by":actor_id,"weapon":"gun",
-                                "amount":45,"bearing":0} for actor_id in (5,6)]
-        action = self.act_with_safety()
+    def test_healthy_target_is_usable_without_short_kill_estimate(self):
+        self.obs["mechs"] = [self.enemy(100)]
+        action = self.bot.act(self.obs)
+        self.assertIsNone(self.bot.telemetry["engagement"]["finish_eta"])
         self.assertEqual(self.bot.telemetry["target"], 5)
-        self.assertEqual(self.bot.telemetry["engagement"]["authorized_ids"], [5,6])
-        self.assertFalse(action["fire"][1], "The third chain recipient has no permission")
-        self.assertTrue(action["fire"][0], "Direct defense against the first attacker remains valid")
+        self.assertTrue(action["fire"][0])
 
-    def test_finish_deadline_persists_across_bot_actions(self):
-        self.enter_finish(evidence_age=1.7)
-        entry = dict(self.bot.telemetry["engagement"])
-        self.assertAlmostEqual(entry["finish_deadline"], 22)
-        self.assertAlmostEqual(entry["entry_evidence_at"], 18.3)
-        self.advance_frame(.4)
-        self.obs["self"]["weapons"][1]["charge"] = .3
-        self.obs["mechs"][0]["hp"] = 140
-        self.obs["events"] = [{"type":"hit","target":5,"weapon":"gun","amount":10}]
-        self.act_with_safety([5])
-        later = self.bot.telemetry["engagement"]
-        self.assertEqual(self.bot.state, "FINISH")
-        self.assertEqual(self.bot.telemetry["target"], 5)
-        self.assertAlmostEqual(later["finish_deadline"], entry["finish_deadline"])
-        self.assertAlmostEqual(later["entry_evidence_at"], entry["entry_evidence_at"])
-        self.assertEqual(later["authorized_ids"], [5])
+    def test_distant_current_enemy_is_approached_and_attacked(self):
+        self.obs["mechs"] = [self.enemy(220)]
+        action = self.bot.act(self.obs)
+        self.assertGreater(self.bot.telemetry["goal"][0], 0)
+        self.assertGreater(action["move"][0], 0)
+        self.assertTrue(self.bot.telemetry["allow_fire"])
 
-    def test_recovery_aborts_finish_and_preserves_held_laser_aim(self):
-        self.enter_finish()
-        self.advance_frame(.2)
-        self.obs["self"].update(hp=500,aim=[.2,.1])
-        self.obs["self"]["weapons"][1]["charge"] = .3
-        self.obs["mechs"].append(self.enemy(0,50,id=6))
-        action = self.act_with_safety([5])
-        self.assertEqual(self.bot.state, "RECOVER")
-        self.assert_no_enemy_fire(action)
-        self.assertIsNone(self.bot.telemetry["engagement"]["finish_deadline"])
-        self.assertEqual(action["aim"], self.obs["self"]["aim"])
+    def test_beyond_weapon_range_enemy_guides_pursuit_without_shot(self):
+        self.obs["mechs"] = [self.enemy(300)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.state, "PURSUE")
+        self.assertIsNone(self.bot.telemetry["target"])
+        self.assert_no_trigger(action)
+        self.assertGreater(self.bot.telemetry["goal"][0], 0)
 
-    def test_urgent_rotation_aborts_finish_and_consumes_entry_evidence(self):
-        self.enter_finish()
-        zone = copy.deepcopy(self.obs["zone"])
-        self.advance_frame(.2)
-        self.obs["self"].update(in_zone=False,aim=[.2,.1])
-        self.obs["self"]["weapons"][1]["charge"] = .3
-        self.obs["zone"].update(center=[100,0],radius=60,next_center=[100,0],next_radius=50)
-        def safety_contract(*args, **kwargs):
-            self.assertTrue(kwargs["urgent"])
-            return self.assessment()
-        with patch.object(self.bot.finish_safety,"evaluate",side_effect=safety_contract):
+    def test_pursuit_does_not_bypass_failed_traversal(self):
+        self.obs["mechs"] = [self.enemy(220)]
+        with patch.object(self.bot.map, "navigate", return_value=(0, 0)), \
+             patch.object(self.bot.map, "move_clear", return_value=False):
             action = self.bot.act(self.obs)
-        self.assertEqual(self.bot.state, "ROTATE")
-        self.assert_no_enemy_fire(action)
-        self.assertEqual(action["aim"], self.obs["self"]["aim"])
+        self.assertEqual(action["move"], [0.0, 0.0])
+        self.assertFalse(action["boost"])
+
+    def test_productive_attack_does_not_expire_without_new_evidence(self):
+        self.obs["mechs"] = [self.enemy(100)]
+        first = self.bot.act(self.obs)
+        self.advance_frame(10)
+        later = self.bot.act(self.obs)
+        self.assertTrue(first["fire"][0])
+        self.assertTrue(later["fire"][0])
+        self.assertEqual(self.bot.telemetry["target"], 5)
         self.assertIsNone(self.bot.telemetry["engagement"]["finish_deadline"])
+
+    def test_current_target_disappearance_does_not_fire_at_memory(self):
+        self.obs["mechs"] = [self.enemy(100)]
+        self.bot.act(self.obs)
         self.advance_frame(.1)
-        self.obs["self"]["in_zone"] = True
-        self.obs["self"]["weapons"][1]["charge"] = 0
-        self.obs["zone"] = zone
-        self.assert_no_enemy_fire(self.act_with_safety([5]))
+        self.obs["mechs"] = []
+        action = self.bot.act(self.obs)
+        self.assert_no_trigger(action)
+        self.assertIsNone(self.bot.telemetry["target"])
 
-    def test_quiet_close_weak_mech_never_receives_first_shot(self):
-        self.obs["mechs"] = [self.enemy(8, hp=20)]
-        action = self.act_with_safety([5])
-        self.assertEqual(self.bot.state, "OBSERVE")
-        self.assert_no_enemy_fire(action)
-        self.assertLessEqual(self.bot.telemetry["goal"][0], 0,
-                             "Proximity cannot authorize an attack or approach")
+    def test_missing_attacker_does_not_become_target(self):
+        self.attacked(6)
+        action = self.bot.act(self.obs)
+        self.assert_no_trigger(action)
+        self.assertIsNone(self.bot.telemetry["target"])
 
-    def test_quiet_distant_mech_is_not_chased(self):
-        self.obs["mechs"] = [self.enemy(220, hp=30)]
-        action = self.act_with_safety([5])
-        self.assert_no_enemy_fire(action)
-        self.assertLessEqual(self.bot.telemetry["goal"][0], 1e-8)
+    def test_unrelated_weak_current_enemy_can_beat_recent_attacker(self):
+        self.obs["mechs"] = [self.enemy(100, id=5, hp=20),
+                              self.enemy(100, 30, id=6, hp=1400)]
+        self.attacked(6)
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.telemetry["target"], 5)
+        self.assertTrue(action["fire"][0])
 
-    def test_quiet_nearby_mech_does_not_trigger_partial_reload(self):
+    def test_weaker_occluded_enemy_does_not_starve_usable_target(self):
+        self.obs["mechs"] = [self.enemy(0, 100, id=5, hp=10), self.enemy(100, id=6)]
+        with patch.object(self.bot.map, "line_of_fire", side_effect=lambda a, b: b[1] < 50):
+            action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.telemetry["target"], 6)
+        self.assertTrue(action["fire"][0])
+
+    def test_gun_selects_intervening_enemy_instead_of_shooting_through_it(self):
+        self.obs["mechs"] = [self.enemy(100, id=6, hp=20), self.enemy(50, id=5)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.telemetry["target"], 5)
+        self.assertTrue(action["fire"][0])
+
+    def test_lightning_selects_nearest_reachable_enemy(self):
+        self.obs["self"]["weapons"] = [self.weapon("lightning"), None]
+        self.obs["mechs"] = [self.enemy(40, id=6, hp=20), self.enemy(30, id=5)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.telemetry["target"], 5)
+        self.assertTrue(action["fire"][0])
+
+    def test_lightning_can_chain_into_other_current_hostiles(self):
+        self.obs["self"]["weapons"] = [self.weapon("gun"), self.weapon("lightning")]
+        self.obs["mechs"] = [self.enemy(30, id=5, hp=500),
+                              self.enemy(40, id=6, hp=1000), self.enemy(50, id=7, hp=1000)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.telemetry["engagement"]["authorized_ids"], [5, 6, 7])
+        self.assertEqual(self.bot.telemetry["target"], 5)
+        self.assertTrue(action["fire"][1])
+
+    def test_threatened_partial_magazine_remains_available(self):
         self.obs["self"]["weapons"][0]["ammo"] = 9
         self.obs["mechs"] = [self.enemy(100)]
-        action = self.act_with_safety()
-        self.assert_no_enemy_fire(action)
-        self.assertFalse(action["reload"],
-                         "Withholding first fire must preserve loaded defensive rounds")
+        action = self.bot.act(self.obs)
+        self.assertTrue(action["fire"][0])
+        self.assertFalse(action["reload"])
 
     def test_quiet_without_enemy_tops_up_partial_magazine(self):
         self.obs["self"]["weapons"][0]["ammo"] = 9
-        action = self.act_with_safety()
-        self.assert_no_enemy_fire(action)
+        action = self.bot.act(self.obs)
+        self.assert_no_trigger(action)
         self.assertTrue(action["reload"])
 
     def test_quiet_occluded_enemy_allows_partial_reload(self):
         self.obs["self"]["weapons"][0]["ammo"] = 9
         self.obs["mechs"] = [self.enemy(100)]
         with patch.object(self.bot.map, "line_of_fire", return_value=False):
-            action = self.act_with_safety()
-        self.assert_no_enemy_fire(action)
-        self.assertTrue(action["reload"], "Observed cover permits a quiet top-up")
+            action = self.bot.act(self.obs)
+        self.assert_no_trigger(action)
+        self.assertTrue(action["reload"])
 
-    def test_empty_magazine_reloads_even_near_quiet_enemy(self):
+    def test_empty_magazine_reloads_during_exposure(self):
         self.obs["self"]["weapons"][0]["ammo"] = 0
         self.obs["mechs"] = [self.enemy(100)]
-        action = self.act_with_safety()
-        self.assert_no_enemy_fire(action)
-        self.assertTrue(action["reload"], "An empty gun needs reloading despite exposure")
+        action = self.bot.act(self.obs)
+        self.assertTrue(action["reload"])
+        self.assertFalse(action["fire"][0])
 
-    def test_renewed_defense_uses_rounds_preserved_during_quiet_frame(self):
+    def test_quiet_recovery_preserves_rounds_for_renewed_pressure(self):
+        self.obs["self"]["hp"] = 500
         self.obs["self"]["weapons"][0]["ammo"] = 9
         self.obs["mechs"] = [self.enemy(100)]
-        quiet_action = self.act_with_safety()
-        self.assert_no_enemy_fire(quiet_action)
-        self.assertFalse(quiet_action["reload"])
-        self.obs.update(t=self.obs["t"] + .1, tick=self.obs["tick"] + 2)
+        quiet = self.bot.act(self.obs)
+        self.assert_no_trigger(quiet)
+        self.assertFalse(quiet["reload"])
+        self.advance_frame(.1)
         self.attacked(5)
-        action = self.act_with_safety()
-        self.assertEqual(self.bot.state, "DEFEND")
-        self.assertEqual(self.bot.telemetry["target"], 5)
-        self.assertTrue(action["fire"][0])
-        self.assertFalse(action["reload"])
+        active = self.bot.act(self.obs)
+        self.assertEqual(self.bot.mode, "recover")
+        self.assertTrue(active["fire"][0])
+        self.assertFalse(active["reload"])
 
-    def test_withdrawn_permission_releases_laser_without_retargeting_quiet_mech(self):
-        # Releasing a held laser emits a beam; false triggers alone are not a
-        # no-shot guarantee. Idle scanning must preserve the observed barrel.
-        self.obs["self"]["weapons"] = [self.weapon("gun"),
-                                          self.weapon("laser", charge=.75)]
-        self.obs["self"]["aim"] = [0, -.05]
-        self.obs["mechs"] = [self.enemy(80 * math.cos(.15),
-                                        80 * math.sin(.15))]
-        action = self.act_with_safety()
-        self.assert_no_enemy_fire(action)
-        self.assertEqual(action["aim"], self.obs["self"]["aim"])
-
-    def test_first_shrink_does_not_unlock_arbitrary_offense(self):
-        self.obs.update(t=120, tick=2400)
-        self.obs["zone"].update(radius=200, next_radius=120,
-                                shrink_start=150, shrink_end=190)
-        self.obs["mechs"] = [self.enemy(80, hp=20)]
-        self.assert_no_enemy_fire(self.act_with_safety([5]))
-
-    def test_safe_opening_crate_farming_has_separate_permission(self):
-        self.obs["crates"] = [{"id": 1001, "pos": [35, 0, 0], "hp": 300}]
-        self.obs["self"]["aim"] = [0, math.atan2(1.2 - 7, 35)]
-        action = self.act_with_safety()
-        self.assertEqual(self.bot.state, "OBSERVE")
-        self.assertEqual(self.bot.resource_key, ("crates", 1001))
-        self.assertEqual(self.bot.telemetry["target"], 1001)
-        self.assertTrue(self.bot.telemetry["allow_fire"])
-        self.assertEqual(self.bot.telemetry["fire_reason"], "safe_farming")
-        self.assertTrue(action["fire"][0])
-
-    def test_safe_opening_npc_farming_is_allowed(self):
-        self.obs["mechs"] = [self.enemy(40, id=102, kind="npc", hp=350,
-                                        max_hp=350, weapons=[])]
-        self.obs["self"]["aim"] = [0, math.atan2(1.75 - 7, 40)]
-        action = self.act_with_safety()
-        self.assertEqual(self.bot.resource_key, ("npc", 102))
-        self.assertEqual(self.bot.telemetry["target"], 102)
-        self.assertTrue(self.bot.telemetry["allow_fire"])
-        self.assertEqual(self.bot.telemetry["fire_reason"], "safe_farming")
-        self.assertTrue(action["fire"][0])
-
-    def test_unsafe_farming_does_not_start_mech_combat(self):
-        self.obs["crates"] = [{"id": 1001, "pos": [35, 0, 0], "hp": 300}]
-        self.obs["mechs"] = [self.enemy(50)]
-        self.assert_no_enemy_fire(self.act_with_safety())
-        self.assertIsNone(self.bot.resource_key)
-
-    def test_attributed_mech_defense_continues_during_recovery(self):
+    def test_recovery_quiet_healing_suppresses_long_trade(self):
         self.obs["self"]["hp"] = 500
         self.obs["mechs"] = [self.enemy(100)]
-        self.attacked(5)
-        action = self.act_with_safety()
+        action = self.bot.act(self.obs)
         self.assertEqual(self.bot.state, "RECOVER")
+        self.assertEqual(self.bot.mode, "recover")
         self.assertEqual(self.bot.telemetry["target"], 5)
-        self.assertTrue(self.bot.telemetry["allow_fire"])
+        self.assert_no_trigger(action)
+
+    def test_recovery_allows_verified_short_kill_without_attribution(self):
+        self.obs["self"]["hp"] = 500
+        self.obs["mechs"] = [self.enemy(100, hp=20)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.mode, "recover")
+        self.assertEqual(self.bot.telemetry["fire_reason"], "recovery_short_kill")
         self.assertTrue(action["fire"][0])
 
-    def test_attributed_defense_continues_during_zone_rotation(self):
+    def recovery_laser_setup(self):
+        self.obs["self"]["hp"] = 500
+        self.obs["self"]["weapons"] = [self.weapon("gun", ammo=0, reload=2.4),
+                                          self.weapon("laser")]
+        self.obs["mechs"] = [self.enemy(100, hp=150)]
+
+    def test_grounded_recovery_starts_laser_supporting_verified_short_kill(self):
+        self.recovery_laser_setup()
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.state, "RECOVER")
+        self.assertEqual(self.bot.mode, "recover", "Charge permission must not switch to pursuit")
+        self.assertEqual(self.bot.telemetry["engagement"]["finish_weapon"], "laser")
+        self.assertLessEqual(self.bot.telemetry["engagement"]["finish_eta"], 1.25)
+        self.assertTrue(self.bot.telemetry["permit_short_charge"])
+        self.assertTrue(action["fire"][1])
+        self.assertFalse(action["fire"][0], "The empty reloading gun is not the modeled finisher")
+
+    def test_urgent_recovery_vetoes_even_verified_short_laser_charge(self):
+        self.recovery_laser_setup()
         self.obs["self"]["in_zone"] = False
         self.obs["zone"].update(center=[100, 0], radius=60,
                                 next_center=[100, 0], next_radius=50)
-        self.obs["mechs"] = [self.enemy(80)]
-        self.attacked(5)
-        with patch.object(self.bot.finish_safety, "evaluate",
-                          return_value=self.assessment()) as evaluate:
-            action = self.bot.act(self.obs)
-        self.assertTrue(evaluate.call_args.kwargs["urgent"])
+        action = self.bot.act(self.obs)
         self.assertEqual(self.bot.state, "ROTATE")
+        self.assertTrue(self.bot.recover)
+        self.assertEqual(self.bot.telemetry["engagement"]["finish_weapon"], "laser")
         self.assertTrue(self.bot.telemetry["allow_fire"])
+        self.assertFalse(self.bot.telemetry["permit_short_charge"])
+        self.assertFalse(action["fire"][1])
+
+    def test_airborne_recovery_vetoes_verified_short_laser_charge(self):
+        self.recovery_laser_setup()
+        self.obs["self"].update(grounded=False, pos=[0, 0, 3], vel=[0, 0, -2])
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.state, "RECOVER")
+        self.assertEqual(self.bot.telemetry["engagement"]["finish_weapon"], "laser")
+        self.assertTrue(self.bot.telemetry["allow_fire"])
+        self.assertFalse(self.bot.telemetry["permit_short_charge"])
+        self.assertFalse(action["fire"][1])
+
+    def test_gun_only_short_kill_does_not_enable_nonlethal_ready_laser(self):
+        # Six legitimate upgrades at 21 cubes make the gun burst stronger than
+        # one unupgraded beam. A generic short ETA must not license that beam.
+        gun, laser = self.weapon("gun"), self.weapon("laser")
+        upgrade_ids = ["gun_damage"] * 3 + ["gun_rate"] * 3
+        for upgrade_id in upgrade_ids:
+            upgrade = next(u for u in self.hello["config"]["upgrades"] if u["id"] == upgrade_id)
+            for effect in upgrade["effects"]:
+                gun["stats"][effect["path"].split(".")[-1]] *= effect["mul"]
+        me = self.obs["self"]
+        me.update(hp=500, max_hp=1960, cubes=21, upgrades=upgrade_ids, weapons=[gun, laser])
+        size = 1 + self.hello["config"]["cubes"]["size_per_cube"] * 21
+        for key in ("muzzle_height", "eye_height"):
+            me["stats"][key] = self.hello["config"]["mech"][key] * size
+        me["aim"] = [0, math.atan2(4.5 - me["stats"]["muzzle_height"], 40)]
+        self.obs["mechs"] = [self.enemy(40, hp=350)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.state, "RECOVER")
+        self.assertEqual(self.bot.telemetry["engagement"]["finish_weapon"], "gun")
+        self.assertLessEqual(self.bot.telemetry["engagement"]["finish_eta"], 1.25)
+        self.assertTrue(self.bot.telemetry["allow_fire"])
+        self.assertFalse(self.bot.telemetry["permit_short_charge"])
+        self.assertTrue(action["fire"][0])
+        self.assertFalse(action["fire"][1])
+
+    def test_critical_hp_does_not_take_discretionary_short_kill(self):
+        self.obs["self"]["hp"] = 180
+        self.obs["mechs"] = [self.enemy(100, hp=20)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.state, "RECOVER")
+        self.assert_no_trigger(action)
+
+    def test_declined_critical_hp_kill_does_not_suppress_healing_cube(self):
+        self.obs["self"]["hp"] = 180
+        self.obs["mechs"] = [self.enemy(100, hp=20)]
+        self.obs["cubes"] = [{"id": 5001, "pos": [-10, 0, 0]}]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.state, "RECOVER")
+        self.assert_no_trigger(action)
+        self.assertLess(self.bot.telemetry["engagement"]["finish_eta"], 1.25)
+        self.assertEqual(self.bot.resource_key, ("cubes", 5001))
+        self.assertEqual(self.bot.mode, "loot")
+        self.assertEqual(self.bot.telemetry["goal"], [-10, 0, 0])
+
+    def test_recovery_immediate_threat_allows_fire_without_prior_hit(self):
+        self.obs["self"]["hp"] = 500
+        self.obs["mechs"] = [self.enemy(25)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.mode, "recover")
+        self.assertTrue(action["fire"][0])
+
+    def test_recovery_pressure_expires_back_to_quiet_healing(self):
+        self.obs["self"]["hp"] = 500
+        self.obs["mechs"] = [self.enemy(100)]
+        self.attacked(5)
+        self.assertTrue(self.bot.act(self.obs)["fire"][0])
+        self.advance_frame(3.1)
+        self.assert_no_trigger(self.bot.act(self.obs))
+
+    def test_quiet_recovery_release_preserves_existing_laser_aim(self):
+        self.obs["self"].update(hp=500, aim=[.2, .1])
+        self.obs["self"]["weapons"] = [self.weapon("gun"), self.weapon("laser", charge=.75)]
+        self.obs["mechs"] = [self.enemy(100), self.enemy(0, 100, id=6)]
+        action = self.bot.act(self.obs)
+        self.assert_no_trigger(action)
+        # False trigger releases a held charge; it does not cancel emission.
+        self.assertEqual(action["aim"], self.obs["self"]["aim"])
+
+    def test_target_loss_release_preserves_existing_laser_aim(self):
+        self.obs["self"]["aim"] = [.2, .1]
+        self.obs["self"]["weapons"] = [self.weapon("gun"), self.weapon("laser", charge=.75)]
+        self.obs["sounds"] = [{"kind": "gun", "bearing": 1.5, "dist": "near", "age": .1}]
+        action = self.bot.act(self.obs)
+        self.assert_no_trigger(action)
+        self.assertEqual(action["aim"], self.obs["self"]["aim"])
+
+    def test_rotation_moves_to_zone_while_firing_at_enemy_opposite_it(self):
+        self.obs["self"]["in_zone"] = False
+        self.obs["self"]["aim"] = [math.pi, 0]
+        self.obs["zone"].update(center=[100, 0], radius=60,
+                                next_center=[100, 0], next_radius=50)
+        self.obs["mechs"] = [self.enemy(-100)]
+        self.obs["cubes"] = [{"id": 5001, "pos": [-10, 0, 0]}]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.state, "ROTATE")
+        self.assertEqual(self.bot.mode, "rotate")
+        self.assertGreater(self.bot.telemetry["goal"][0], 0)
+        self.assertIsNone(self.bot.resource_key)
+        self.assertTrue(action["fire"][0])
+
+    def test_urgent_rotation_does_not_start_laser_slowdown(self):
+        self.obs["self"]["in_zone"] = False
+        self.obs["self"]["weapons"] = [self.weapon("gun"), self.weapon("laser")]
+        self.obs["zone"].update(center=[100, 0], radius=60,
+                                next_center=[100, 0], next_radius=50)
+        self.obs["mechs"] = [self.enemy(100)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.state, "ROTATE")
+        self.assertFalse(action["fire"][1])
+
+    def test_safe_crate_farming_still_works(self):
+        self.obs["crates"] = [{"id": 1001, "pos": [35, 0, 0], "hp": 300}]
+        self.obs["self"]["aim"] = [0, math.atan2(1.2 - 7, 35)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.state, "FARM")
+        self.assertEqual(self.bot.resource_key, ("crates", 1001))
+        self.assertEqual(self.bot.telemetry["target"], 1001)
+        self.assertEqual(self.bot.telemetry["fire_reason"], "safe_farming")
+        self.assertTrue(action["fire"][0])
+
+    def test_safe_npc_farming_still_works(self):
+        self.obs["mechs"] = [self.enemy(40, id=102, kind="npc", hp=350,
+                                        max_hp=350, weapons=[])]
+        self.obs["self"]["aim"] = [0, math.atan2(1.75 - 7, 40)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.resource_key, ("npc", 102))
+        self.assertEqual(self.bot.telemetry["target"], 102)
+        self.assertTrue(action["fire"][0])
+
+    def test_close_mech_combat_preempts_crate_farming(self):
+        self.obs["crates"] = [{"id": 1001, "pos": [35, 20, 0], "hp": 300}]
+        self.obs["mechs"] = [self.enemy(50)]
+        action = self.bot.act(self.obs)
+        self.assertIsNone(self.bot.resource_key)
         self.assertEqual(self.bot.telemetry["target"], 5)
         self.assertTrue(action["fire"][0])
 
-    def test_weaker_unrelated_mech_does_not_inherit_defense(self):
-        self.obs["mechs"] = [self.enemy(0, 50, id=5, hp=10),
-                              self.enemy(100, id=6, hp=1000)]
-        self.attacked(6)
-        action = self.act_with_safety([5, 6])
-        self.assertEqual(self.bot.state, "DEFEND")
-        self.assertEqual(self.bot.telemetry["target"], 6)
+    def test_distant_mech_does_not_starve_safe_crate_farming(self):
+        self.obs["crates"] = [{"id": 1001, "pos": [20, 20, 0], "hp": 300}]
+        self.obs["mechs"] = [self.enemy(220)]
+        self.bot.act(self.obs)
+        self.assertEqual(self.bot.resource_key, ("crates", 1001))
+        self.assertEqual(self.bot.telemetry["target"], 1001)
+        self.assertEqual(self.bot.state, "FARM")
+        self.assertTrue(self.bot.telemetry["allow_fire"])
+
+    def test_loose_cube_detour_coexists_with_distant_target_fire(self):
+        self.obs["mechs"] = [self.enemy(180)]
+        self.obs["cubes"] = [{"id": 5001, "pos": [0, 10, 0]}]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.resource_key, ("cubes", 5001))
+        self.assertEqual(self.bot.mode, "loot")
+        self.assertEqual(self.bot.telemetry["target"], 5)
+        self.assertGreater(self.bot.telemetry["goal"][1], 0)
         self.assertTrue(action["fire"][0])
 
-    def test_defensive_gun_does_not_fire_through_quiet_mech(self):
-        self.obs["mechs"] = [self.enemy(100, id=6),
-                              self.enemy(50, id=5)]
-        self.attacked(6)
-        action = self.act_with_safety()
-        self.assertIn(self.bot.state, ("DEFEND", "OBSERVE"))
-        self.assertIn(self.bot.telemetry["target"], (None, 6))
-        if self.bot.telemetry["target"] is None:
-            self.assertFalse(self.bot.telemetry["allow_fire"])
-            self.assertEqual(action["fire"], [False, False])
-        self.assertFalse(action["fire"][0],
-                         "Target permission cannot authorize an intervening mech")
+    def test_short_kill_preempts_loose_cube_detour(self):
+        self.obs["mechs"] = [self.enemy(100, hp=20)]
+        self.obs["cubes"] = [{"id": 5001, "pos": [0, 10, 0]}]
+        action = self.bot.act(self.obs)
+        self.assertIsNone(self.bot.resource_key)
+        self.assertEqual(self.bot.telemetry["target"], 5)
+        self.assertTrue(action["fire"][0])
 
-    def test_defensive_lightning_does_not_select_nearer_quiet_mech(self):
-        self.obs["self"]["weapons"] = [self.weapon("gun"),
-                                          self.weapon("lightning")]
-        self.obs["mechs"] = [self.enemy(40, id=6),
-                              self.enemy(30, 3, id=5)]
-        self.attacked(6)
-        action = self.act_with_safety()
-        self.assertIn(self.bot.state, ("DEFEND", "OBSERVE"))
-        self.assertIn(self.bot.telemetry["target"], (None, 6))
-        if self.bot.telemetry["target"] is None:
-            self.assertFalse(self.bot.telemetry["allow_fire"])
-            self.assertEqual(action["fire"], [False, False])
-        self.assertFalse(action["fire"][1],
-                         "Lightning selects the nearest cone actor, not target_id")
-
-    def test_defensive_lightning_does_not_chain_into_quiet_mech(self):
-        self.obs["self"]["weapons"] = [self.weapon("gun"),
-                                          self.weapon("lightning")]
-        self.obs["mechs"] = [self.enemy(30, id=6),
-                              self.enemy(40, id=5)]
-        self.attacked(6)
-        action = self.act_with_safety()
-        self.assertEqual(self.bot.state, "DEFEND")
-        self.assertEqual(self.bot.telemetry["target"], 6)
-        self.assertTrue(self.bot.telemetry["allow_fire"])
-        self.assertFalse(action["fire"][1],
-                         "An authorized first hit cannot authorize a quiet chain victim")
-
-    def test_missing_attacker_does_not_authorize_visible_quiet_mech(self):
-        self.obs["mechs"] = [self.enemy(50, hp=10)]
-        self.attacked(6)
-        self.assert_no_enemy_fire(self.act_with_safety([5]))
-
-    def test_zone_damage_does_not_authorize_an_enemy(self):
-        self.obs["mechs"] = [self.enemy(40, hp=10)]
-        self.obs["events"] = [{"type": "damaged", "by": None,
-                               "weapon": "zone", "amount": 2, "bearing": None}]
-        self.assert_no_enemy_fire(self.act_with_safety([5]))
-
-    def test_npc_defense_is_allowed_during_recovery(self):
+    def test_npc_defense_remains_available_during_recovery(self):
         self.obs["self"]["hp"] = 500
         self.obs["mechs"] = [self.enemy(40, id=102, kind="npc", hp=350,
                                         max_hp=350, weapons=[])]
         self.obs["self"]["aim"] = [0, math.atan2(1.75 - 7, 40)]
         self.attacked(102, weapon="npc", amount=25)
-        action = self.act_with_safety()
+        action = self.bot.act(self.obs)
         self.assertEqual(self.bot.state, "RECOVER")
         self.assertEqual(self.bot.telemetry["target"], 102)
-        self.assertEqual(self.bot.telemetry["fire_reason"], "attributed_npc_attack")
         self.assertTrue(action["fire"][0])
 
-    def test_npc_damage_does_not_authorize_unrelated_mech(self):
-        self.obs["mechs"] = [self.enemy(40, hp=10)]
-        self.attacked(102, weapon="npc", amount=25)
-        self.assert_no_enemy_fire(self.act_with_safety([5]))
-
-    def test_quiet_close_npc_does_not_bypass_recovery_farming_ban(self):
+    def test_quiet_npc_does_not_interrupt_recovery_to_farm(self):
         self.obs["self"]["hp"] = 500
         self.obs["mechs"] = [self.enemy(20, id=102, kind="npc", hp=350,
                                         max_hp=350, weapons=[])]
-        self.assert_no_enemy_fire(self.act_with_safety())
+        self.assert_no_trigger(self.bot.act(self.obs))
 
-    def test_anonymous_projectile_and_sound_allow_evasion_only(self):
-        self.obs["mechs"] = [self.enemy(100, hp=10)]
-        self.obs["projectiles"] = [{"id": 123, "kind": "gun",
-                                     "pos": [50, 0, 4], "vel": [-252, 0, 0]}]
-        self.obs["sounds"] = [{"kind": "gun", "bearing": 0,
-                                "dist": "near", "age": .1}]
-        self.assert_no_enemy_fire(self.act_with_safety([5]))
+    def test_low_energy_approach_does_not_boost(self):
+        self.obs["self"]["energy"] = 30
+        self.obs["mechs"] = [self.enemy(220)]
+        action = self.bot.act(self.obs)
+        self.assertGreater(self.bot.telemetry["goal"][0], 0)
+        self.assertFalse(action["boost"])
 
-    def test_our_hit_does_not_manufacture_an_external_fight(self):
-        self.obs["mechs"] = [self.enemy(100, hp=30)]
-        self.obs["events"] = [{"type": "hit", "target": 5,
-                               "weapon": "gun", "amount": 45}]
-        self.assert_no_enemy_fire(self.act_with_safety([5]))
-
-    def test_attributed_beam_crossing_our_body_authorizes_defense(self):
-        self.obs["mechs"] = [self.enemy(100)]
-        self.obs["beams"] = [{"by": 5, "kind": "laser", "age": .1,
-                               "path": [[100, 0, 7], [0, 0, 4.5]]}]
-        action = self.act_with_safety()
-        self.assertEqual(self.bot.state, "DEFEND")
-        self.assertEqual(self.bot.telemetry["target"], 5)
-        self.assertTrue(action["fire"][0])
-
-    def test_safe_finish_selects_lowest_hp_with_hidden_beam_shooter(self):
-        self.existing_fight()
-        action = self.act_with_safety([5, 6])
-        self.assertNotIn(9, [actor["id"] for actor in self.obs["mechs"]])
-        self.assertEqual(self.bot.state, "FINISH")
-        self.assertEqual(self.bot.telemetry["target"], 5)
-        self.assertEqual(self.bot.telemetry["target_hp"], 40)
-        self.assertTrue(self.bot.telemetry["allow_fire"])
-        self.assertTrue(action["fire"][0])
-
-    def test_unsafe_lowest_hp_cannot_borrow_other_target_safety(self):
-        self.existing_fight()
-        self.act_with_safety([6])
-        self.assertEqual(self.bot.state, "FINISH")
-        self.assertEqual(self.bot.telemetry["target"], 6)
-        self.assertEqual(self.bot.telemetry["target_hp"], 70)
-
-    def test_elective_finish_preserves_energy_from_lightning_and_boost(self):
-        lightning = self.weapon("lightning")
-        lightning["stats"]["range"] = 70
-        self.obs["self"].update(energy=36,
-                                  weapons=[self.weapon("gun"), lightning])
-        self.obs["mechs"] = [self.enemy(65, id=5, hp=20)]
-        self.obs["beams"] = [{"by": 9, "kind": "lightning", "age": .1,
-                               "path": [[90, 10, 7], [65, 0, 4.5]]}]
-        # Force a requested boost so this exercises orchestration's final
-        # spending guard, independently of tactical boost selection.
-        with patch.object(self.bot, "movement", return_value=((1, 0), True)):
-            action = self.act_with_safety([5])
-        self.assertEqual(self.bot.state, "FINISH")
-        self.assertEqual(self.bot.telemetry["target"], 5)
-        self.assertTrue(self.bot.telemetry["allow_fire"])
-        self.assertTrue(action["fire"][0], "The affordable gun finish remains available")
-        self.assertFalse(action["fire"][1], "Lightning cannot spend the escape reserve")
-        self.assertFalse(action["boost"], "Boost cannot spend the escape reserve")
-
-    def test_existing_fight_without_safety_permission_is_observed(self):
-        self.existing_fight()
-        self.assert_no_enemy_fire(self.act_with_safety())
-        self.assertEqual(self.bot.state, "OBSERVE")
-
-    def test_recovery_preempts_external_finish_even_with_safe_geometry(self):
-        self.existing_fight()
-        self.obs["self"]["hp"] = 500
-        self.assert_no_enemy_fire(self.act_with_safety([5, 6]))
-        self.assertEqual(self.bot.state, "RECOVER")
-
-    def test_expired_fight_evidence_returns_to_observation(self):
-        self.existing_fight()
-        self.act_with_safety([5, 6])
-        self.assertEqual(self.bot.state, "FINISH")
-        self.obs.update(t=30, tick=600)
-        self.obs["beams"] = []
-        self.assert_no_enemy_fire(self.act_with_safety([5, 6]))
-        self.assertEqual(self.bot.state, "OBSERVE")
+    def test_low_energy_lightning_retains_weapon_reserve(self):
+        self.obs["self"]["energy"] = 10
+        self.obs["self"]["weapons"] = [self.weapon("gun"), self.weapon("lightning")]
+        self.obs["mechs"] = [self.enemy(30)]
+        action = self.bot.act(self.obs)
+        self.assertFalse(action["fire"][1])
+        self.assertFalse(action["boost"])
 
     def test_orchestration_does_not_mutate_observation(self):
-        self.existing_fight()
+        self.obs["mechs"] = [self.enemy(100, hp=40), self.enemy(100, 20, id=6)]
+        self.obs["cubes"] = [{"id": 5001, "pos": [0, 10, 0]}]
         before = copy.deepcopy(self.obs)
-        self.act_with_safety([5, 6])
+        action = self.bot.act(self.obs)
         self.assertEqual(self.obs, before)
+        self.assertEqual(action["tick"], before["tick"])
 
 
 if __name__ == "__main__":

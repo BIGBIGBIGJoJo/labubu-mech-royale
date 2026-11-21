@@ -4,9 +4,10 @@ Prepared November 21, 2026 for team **labubu**. Requirements below were checked
 against the official event page, track page, full protocol, and downloaded kit.
 Strategy recommendations are hypotheses to evaluate, not a promised winning score.
 
-The current user-confirmed strategy and 6.0 score objective are in
-[AGENT_STRATEGY_PLAN.md](AGENT_STRATEGY_PLAN.md). This document retains the original
-requirements and development plan.
+The current user-confirmed aggressive, kill-oriented strategy and 6.0 official
+score objective are in [AGGRESSIVE_PLAN.md](AGGRESSIVE_PLAN.md). This document
+retains the original requirements and development plan; the former selective
+policy in [AGENT_STRATEGY_PLAN.md](AGENT_STRATEGY_PLAN.md) is historical.
 
 ## 1. Objective and requirements
 

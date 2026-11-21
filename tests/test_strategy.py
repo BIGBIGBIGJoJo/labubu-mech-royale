@@ -216,18 +216,18 @@ class StrategyTests(unittest.TestCase):
         target = self.bot.choose_target(self.obs, self.bot.threats(self.obs, self.bot.stats(self.obs["self"])))
         self.assertEqual(target["id"], 101, "Finish the weaker actual NPC attacker first")
 
-    def test_quiet_nearby_mech_does_not_inherit_npc_attack_permission(self):
-        self.obs["mechs"] = [self.enemy(60), self.enemy(50, id=100, kind="npc", hp=350, max_hp=350)]
+    def test_close_mech_takes_priority_over_npc_attacker(self):
+        self.obs["mechs"] = [self.enemy(60), self.enemy(50, 20, id=100, kind="npc", hp=350, max_hp=350)]
         self.obs["events"] = [{"type": "damaged", "amount": 25, "weapon": "npc", "bearing": 0, "by": 100}]
         self.bot.update(self.obs)
         target = self.bot.choose_target(self.obs, self.bot.threats(self.obs, self.bot.stats(self.obs["self"])))
-        self.assertEqual(target["id"], 100)
+        self.assertEqual(target["id"], 5)
 
-    def test_quiet_actors_do_not_create_defensive_target(self):
-        self.obs["mechs"] = [self.enemy(150), self.enemy(50, id=100, kind="npc", hp=350, max_hp=350)]
+    def test_quiet_mech_is_acquired_without_attack_evidence(self):
+        self.obs["mechs"] = [self.enemy(150), self.enemy(50, 30, id=100, kind="npc", hp=350, max_hp=350)]
         self.bot.update(self.obs)
         target = self.bot.choose_target(self.obs, self.bot.threats(self.obs, self.bot.stats(self.obs["self"])))
-        self.assertIsNone(target)
+        self.assertEqual(target["id"], 5)
 
     def test_recovery_returns_fire_at_actual_npc_then_resumes_quiet_healing(self):
         self.obs["self"]["hp"] = 725
@@ -249,12 +249,14 @@ class StrategyTests(unittest.TestCase):
         self.assertTrue(self.bot.recover)
         self.assertEqual(action["fire"], [False, False])
 
-    def test_close_quiet_enemy_does_not_permit_first_shot_during_recovery(self):
+    def test_close_enemy_can_be_attacked_while_recovery_movement_retreats(self):
         self.obs["self"]["hp"] = 500
         self.obs["mechs"] = [self.enemy(20)]
         action = self.bot.act(self.obs)
         self.assertTrue(self.bot.recover)
-        self.assertEqual(action["fire"], [False, False])
+        self.assertTrue(action["fire"][0])
+        self.assertEqual(self.bot.mode, "recover")
+        self.assertLess(self.bot.telemetry["goal"][0], 0)
 
     def test_recovery_hysteresis_keeps_healing_until_healthy(self):
         self.obs["self"]["hp"] = 500
@@ -342,20 +344,21 @@ class StrategyTests(unittest.TestCase):
         self.assertEqual(self.bot.mode, "loot")
         self.assertEqual(self.bot.telemetry["goal"], [0, 15, 0])
         self.assertGreater(action["move"][1], 0.5)
-        self.assertEqual(action["fire"], [False, False],
-                         "Safe resource movement does not authorize attacking a quiet mech")
+        self.assertTrue(action["fire"][0],
+                        "A safe loose-cube detour can coexist with a useful ranged shot")
+        self.assertEqual(self.bot.telemetry["target"], 5)
 
     def test_close_enemy_blocks_resource_detour(self):
         self.obs["cubes"] = [{"id": 5001, "pos": [0, 15, 0]}]
         self.obs["mechs"] = [self.enemy(50)]
         self.bot.act(self.obs)
-        self.assertEqual(self.bot.mode, "position")
+        self.assertEqual(self.bot.mode, "engage")
         self.assertNotEqual(self.bot.telemetry["goal"], [0, 15, 0])
 
     def test_approaching_lightning_carrier_causes_radial_boosted_retreat(self):
         self.obs["mechs"] = [self.enemy(75, vel=[-11.7, 0, 0], weapons=["gun", "lightning"])]
         action = self.bot.act(self.obs)
-        self.assertEqual(self.bot.mode, "position")
+        self.assertEqual(self.bot.mode, "engage")
         self.assertFalse(self.bot.recover)
         self.assertLess(action["move"][0], -0.9)
         self.assertLess(abs(action["move"][1]), 0.25,
@@ -374,7 +377,7 @@ class StrategyTests(unittest.TestCase):
     def test_stationary_enemy_at_preferred_distance_keeps_strafe(self):
         self.obs["mechs"] = [self.enemy(120, vel=[0, 0, 0])]
         action = self.bot.act(self.obs)
-        self.assertEqual(self.bot.mode, "position")
+        self.assertEqual(self.bot.mode, "engage")
         self.assertLess(abs(action["move"][0]), 0.1)
         self.assertGreater(abs(action["move"][1]), 0.9)
         self.assertFalse(action["boost"])
@@ -386,13 +389,75 @@ class StrategyTests(unittest.TestCase):
         self.assertLess(action["move"][0], -.5)
         self.assertTrue(action["fire"][0])
 
-    def test_healthy_lightning_loadout_does_not_chase_quiet_mech(self):
+    def test_healthy_lightning_loadout_approaches_favorable_mech(self):
         self.obs["self"]["weapons"][1] = self.weapon("lightning")
         self.obs["mechs"] = [self.enemy(80)]
         action = self.bot.act(self.obs)
-        self.assertLessEqual(action["move"][0], 0,
-                             "Owning lightning does not authorize approaching a quiet mech")
+        self.assertGreater(action["move"][0], .5)
+        self.assertGreater(self.bot.telemetry["goal"][0], 0)
+        self.assertTrue(action["fire"][0])
+        self.assertFalse(action["fire"][1], "Approaching must not fire lightning outside its actual range")
+
+    def test_current_out_of_range_mech_is_pursued_without_premature_fire(self):
+        self.obs["mechs"] = [self.enemy(260)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.state, "PURSUE")
+        self.assertEqual(self.bot.mode, "engage")
+        self.assertGreater(action["move"][0], .5)
+        self.assertGreater(self.bot.telemetry["goal"][0], 0)
         self.assertEqual(action["fire"], [False, False])
+
+    def test_lost_pursuit_target_is_not_recreated_from_resource_memory(self):
+        self.obs["mechs"] = [self.enemy(260)]
+        self.bot.act(self.obs)
+        self.obs.update(t=20.1, tick=402, mechs=[])
+        action = self.bot.act(self.obs)
+        self.assertIn(5, self.bot.actor_memory)
+        self.assertEqual(self.bot.state, "OBSERVE")
+        self.assertIsNone(self.bot.telemetry["target"])
+        self.assertEqual(action["fire"], [False, False])
+
+    def test_pursuit_does_not_walk_through_blocked_corridor(self):
+        self.obs["mechs"] = [self.enemy(260)]
+        # A low barrier is visible over but cannot be stepped through. The
+        # tactical controller must reject direct body motion across x=5.5.
+        def clear(start, end, radius, height):
+            return max(start[0], end[0]) + radius <= 5.5
+        with patch.object(self.bot.map, "move_clear", side_effect=clear), \
+                patch('bot.time.perf_counter', return_value=0):
+            action = self.bot.act(self.obs)
+        stats = self.bot.stats(self.obs["self"])
+        path = self.bot.tactical.rollout(self.obs["self"], action["move"], action["boost"], stats)
+        self.assertTrue(all(clear(a[1:4], b[1:4], stats["radius"], stats["height"])
+                            for a, b in zip(path, path[1:])))
+        self.assertEqual(action["fire"], [False, False])
+
+    def test_no_clear_pursuit_step_falls_back_to_braking(self):
+        self.obs["mechs"] = [self.enemy(260)]
+        with patch.object(self.bot.map, "move_clear", return_value=False):
+            action = self.bot.act(self.obs)
+        self.assertEqual(action["move"], [0, 0])
+        self.assertFalse(action["boost"])
+
+    def test_urgent_zone_rotation_preempts_outward_pursuit(self):
+        self.obs["self"].update(pos=[150,0,0], in_zone=False)
+        self.obs["zone"].update(radius=100, next_radius=80)
+        self.obs["mechs"] = [self.enemy(300)]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.state, "ROTATE")
+        self.assertLess(action["move"][0], -.5)
+        center, radius = self.bot.zone_future(self.obs, 22)
+        self.assertLessEqual(policy.distance(self.bot.telemetry["goal"], center)
+                             + self.bot.stats(self.obs["self"])["radius"], radius)
+
+    def test_immediate_kill_window_preempts_loose_cube_detour(self):
+        self.obs["mechs"] = [self.enemy(150, hp=30)]
+        self.obs["cubes"] = [{"id":5001, "pos":[0,15,0]}]
+        action = self.bot.act(self.obs)
+        self.assertEqual(self.bot.mode, "engage")
+        self.assertEqual(self.bot.telemetry["target"], 5)
+        self.assertIsNone(self.bot.telemetry["resource"])
+        self.assertTrue(action["fire"][0])
 
     def test_pickup_requires_vertical_and_horizontal_reach(self):
         self.obs["pickups"] = [{"id": 8001, "kind": "laser", "pos": [1, 0, 5]}]

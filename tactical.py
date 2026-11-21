@@ -37,6 +37,7 @@ class TacticalPlanner:
         self.action_dt=self.dt*max(1,int(config.get("match",{}).get("decide_every",2)))
         self.last_direction=(0.0,0.0)
         self.last_report={}
+        self._geometry_recovery_pending=False
         self.boost_recharging=None
         self._boost_frame=None
         self._boost_time=-float("inf")
@@ -363,7 +364,29 @@ class TacticalPlanner:
             current=(t,x,y,z,vx,vy,vz,energy,grounded)
             result.append(current)
             previous=current
+            if direction==(0.0,0.0) and grounded and vx==vy==vz==0:
+                # A fully checked stationary supported body repeats exactly.
+                # Avoid twelve identical sweeps when comparing real braking
+                # with a slow recovery path; moving inertia is never skipped.
+                # Energy is constant too: zero input cannot activate boost,
+                # and this integrator models no regeneration or future shots.
+                result.extend((future[0],*current[1:]) for future in path[len(result):])
+                break
         return result
+
+    def _recovery_cost(self,path,obs,stats,nav,direction,goal,tracks,pressure,
+                       route_weight,exposure_weight,deadline):
+        """Same movement objectives, conservatively scored without extra rays."""
+        me=obs["self"]
+        end=path[-1]
+        progress=(end[1]-me["pos"][0])*nav[0]+(end[2]-me["pos"][1])*nav[1]
+        cost=-route_weight*progress
+        if goal is not None and math.hypot(goal[0]-me["pos"][0],goal[1]-me["pos"][1])<12:
+            cost+=math.hypot(end[1]-goal[0],end[2]-goal[1])*.8
+        cost+=.3*(1-direction[0]*self.last_direction[0]-direction[1]*self.last_direction[1])
+        return (cost+self.projectile_cost(path,tracks,stats)+self._beam_cost(path,pressure,stats)
+                +self._zone_cost(path,obs,stats)
+                +self._exposure(path,pressure,stats,False,deadline)*exposure_weight)
 
     def choose(self,obs,navigation,threats,stats,*,goal=None,recover=False,
                urgent=False,spacing_boost=False,deadline=None,boost_emergency=False,shot_energy=0):
@@ -374,8 +397,10 @@ class TacticalPlanner:
                       "boost_low":35.0,"boost_high":boost_high,"shot_energy":shot_energy}
         deadline=min(deadline if deadline is not None else begin+.014,begin+.014)-.0015
         if deadline<=begin:
+            self._geometry_recovery_pending=False
             self.last_report={"ms":(time.perf_counter()-begin)*1000,"candidates":0,
                               "geometry_checked":0,"projectiles":0,"fallback":True,
+                              "recovery_seed_checked":False,"recovery_seed_selected":False,
                               "boost_reason":"deadline",**boost_report}
             return (0.0,0.0),False
         me=obs["self"]
@@ -387,6 +412,8 @@ class TacticalPlanner:
         route_weight=1.3+(max(3.0,obs["zone"]["dps"]/max(stats["walk_speed"],1)) if urgent else 0)
         exposure_weight=(1.0 if recover else .65)*(.35 if urgent else 1.0)
         nav=unit(*navigation)
+        recovery_eligible=bool(self._geometry_recovery_pending and nav!=(0.0,0.0) and me.get("grounded",True))
+        self._geometry_recovery_pending=False
         angle=math.atan2(nav[1],nav[0])
         directions=[nav,self.last_direction,(0.0,0.0)]
         directions.extend((math.cos(angle+a),math.sin(angle+a)) for a in (.35,-.35,.7,-.7,1.1,-1.1,1.57,-1.57,2.2,-2.2,math.pi))
@@ -408,6 +435,32 @@ class TacticalPlanner:
         # merely because rotation/recovery is active or progress would be faster.
         possible_override=bool(tracks or any(q.get("los") and (q["actor"].get("charging") or q["d"]<self.lightning_escape_range+stats["radius"]+15) for q in pursuers))
         allow_boost=emergency_boost and (ordinary_boost or boost_emergency or possible_override)
+        best=None
+        checked=0
+        seed_direction=None
+        seed_checked=False
+        charging=any(w and w["kind"]=="laser" and w.get("charge",0)>0 for w in me["weapons"])
+        if recovery_eligible and time.perf_counter()+.0015<deadline:
+            # Check one slow, continuously applied command before ordinary
+            # full-speed candidates can consume the geometry budget. No future
+            # brake is assumed: the returned fractional input matches rollout.
+            seed_checked=True
+            direction=(nav[0]*.5,nav[1]*.5)
+            path=self.rollout(planning_me,direction,False,stats)
+            checked+=1
+            corrected=self._geometry(path,stats,deadline-.001,direction,False,charging)
+            if corrected is not None and time.perf_counter()+.0007<deadline:
+                brake=self.rollout(planning_me,(0.0,0.0),False,stats)
+                checked+=1
+                safe_brake=self._geometry(brake,stats,deadline-.0005,(0.0,0.0),False,charging)
+                if time.perf_counter()<deadline:
+                    cost=self._recovery_cost(corrected,obs,stats,nav,direction,goal,tracks,pressure,
+                                             route_weight,exposure_weight,deadline)
+                    brake_cost=self._recovery_cost(safe_brake or brake,obs,stats,nav,(0.0,0.0),goal,
+                                                   tracks,pressure,route_weight,exposure_weight,deadline)
+                    if cost<brake_cost:
+                        best=(cost,direction,False,None)
+                        seed_direction=direction
         ranked=[]
         cheap_deadline=min(deadline-.004,begin+.006)
         for direction in unique:
@@ -445,14 +498,11 @@ class TacticalPlanner:
             if time.perf_counter()>=cheap_deadline:
                 break
         ranked.sort(key=lambda item:item[0])
-        best=None
-        checked=0
         # Exact geometry and incoming LOS are reserved for promising candidates.
         for cost,direction,boost,path,bullet,exposure,walking,reason in ranked:
             if time.perf_counter()>=deadline or checked>=6:
                 break
             checked+=1
-            charging=any(w and w["kind"]=="laser" and w.get("charge",0)>0 for w in me["weapons"])
             corrected=self._geometry(path,stats,deadline,direction,boost,charging)
             if corrected is None:
                 continue
@@ -485,8 +535,12 @@ class TacticalPlanner:
         else:
             result=(best[1],best[2])
             self.last_direction=best[1]
+        seed_selected=bool(best is not None and seed_direction is not None and best[1]==seed_direction and not best[2])
+        self._geometry_recovery_pending=bool(nav!=(0.0,0.0) and me.get("grounded",True)
+                                             and ((best is None and checked>0) or seed_selected))
         self.last_report={"ms":(time.perf_counter()-begin)*1000,"candidates":len(ranked),
                           "geometry_checked":checked,"projectiles":len(tracks),"fallback":best is None,
+                          "recovery_seed_checked":seed_checked,"recovery_seed_selected":seed_selected,
                           "boost_reason":best[3] if best and best[2] else "recharging" if self.boost_recharging else "walk_selected",
                           **boost_report}
         return result

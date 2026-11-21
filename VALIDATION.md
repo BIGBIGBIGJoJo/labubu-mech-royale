@@ -14,9 +14,11 @@ Verified on November 21, 2026. Official score means mean `16 - place` over
 | BB-81C2BC51 | 373f70986d2ffe9077d7afc1a8c773097b4f4ede | 4.63 | Accepted; lower than the selected best |
 | BB-1B3ACBAA | 88488f29e2b56ea82b33930793a6506c91efc21a | 2.46 | Accepted; selective policy underperformed in coordinated practice |
 | BB-391F3E46 | e5f021a2a0364a1db2d162afe0e3a29b9ed8b792 | 2.29 | Accepted; route/reload fixes did not improve practice score |
+| BB-C709FC88 | 54c9f5f30f3a16cfd3bf276cfe31f7e3037309a9 | 2.33 | Accepted; energy change remains below the selected best |
+| BB-AC10AB33 | 01df3dc61f89352c4d54b8aa93b3922a206d8355 | 2.69 | Accepted; bounded defensive continuation, previous selective objective |
 
 The strategy-v2 candidate improved 4.19 to 4.75 (approximately 13.4%).
-Seven submissions have been accepted. The hourly quota replenishes over time;
+Nine submissions have been accepted. The hourly quota replenishes over time;
 check the authenticated panel before any further attempt.
 
 The automatically selected entry is the commit above; this is **not** a claim
@@ -26,6 +28,79 @@ Source: authenticated team's submission panel on the
 [official track page](https://www.joinbuilders.org/buildathon/tracks/builders).
 The team page automatically enters its best accepted score unless another
 submission is explicitly selected. No tournament placement is guaranteed.
+
+BB-AC10AB33 scored 2.69. The user subsequently changed the objective to greedy,
+aggressive play. The new candidate follows AGGRESSIVE_PLAN.md; the 6.0 target
+remains unmet and none of the selective scores measures the new implementation.
+
+## Aggressive-v1 candidate verification
+
+This candidate follows the updated user objective in AGGRESSIVE_PLAN.md. It
+proactively attacks current usable enemies, prioritizes validated short kills,
+restores approach, permits hostile collateral, and retains zone, terrain,
+energy, reload and recovery mechanics. The separately reproduced short recovery
+escape is included. Previous selective results do not measure this candidate.
+
+The initial pre-fix checkpoint had the following results:
+
+- All 373 regression tests passed, including 21 proactive-selection tests,
+  40 root orchestration tests and 19 recovery-escape tests.
+- Restricted Docker checker: 300/300 timely replies, zero invalid lines, wrong
+  ticks or older queued responses; p99 13.8 ms, maximum 17.8 ms, ready in 1,530 ms.
+- Full-policy real-map host stress: 580 schema-valid decisions, maximum 32.35 ms,
+  zero above 50 ms. The dense weak-target cases selected 23 proactive short kills.
+- Actual-LOS selector benchmark: 288 cases, mean 3.40 ms, p99 7.19 ms, maximum
+  8.46 ms. A relaxed reference found zero usable targets missed solely by budget
+  in that run. The requested 6 ms selector cutoff is cooperative: an in-progress
+  geometry query can overrun it. Full-policy checks above establish the relevant
+  local action timing, not a guarantee on every host.
+
+The first prepublication aggressive diagnostic finished 3rd with zero kills and
+three cubes at 118 seconds. It dealt 3,156 damage, took 2,173, and took 285 zone
+damage. All 1,181 actions computed below 50 ms (maximum 33.37 ms), with zero
+policy errors. Proactive fire began at 0.3 seconds before an attributed incoming
+attack from that target. This uncontrolled private result is not an official score.
+
+The trace exposed two defects requiring correction before publication: repeated
+neutral trajectory fallback went undetected while navigation intended movement,
+and the first weapon slot's reload delay biased the otherwise usable target's
+readiness score. The source/trace snapshot remains local for exact reproduction;
+the corrected candidate was checked again as follows.
+
+The corrected source passes **422 tests**, including 30 aggressive-selection,
+44 orchestration, 19 tactical-recovery and 17 navigation-intent cases. It fixes
+readiness-order bias, reuses exact geometry only within the current decision,
+records the actual finishing weapon, and permits a verified quick laser charge
+during grounded non-urgent recovery. Tactical recovery now gives a fully checked
+half-throttle candidate early priority after neutral geometry fallback. A separate
+intent monitor reports stalls without forcing unsafe motion.
+
+- Restricted Docker checker: 300/300 replies on time, zero invalid lines or
+  wrong ticks; p99 13.2 ms, maximum 13.6 ms, ready in 1,425 ms. Two replies to
+  older queued observations were discarded; the checker passed.
+- Full-policy real-map host stress: 580 schema-valid decisions, maximum 31.54 ms,
+  none above 50 ms. The dense weak-target cases selected 22 proactive short kills.
+- Updated actual-LOS selector benchmark: 288 cases, mean 3.31 ms, p99 7.38 ms,
+  maximum 7.67 ms; zero budget-only missed usable targets against the relaxed
+  reference. The cooperative selector cutoff still does not guarantee a hard
+  per-component duration.
+- The captured 51.3-second opportunity now reports a laser finishing ETA of
+  0.85 seconds. This is a decision/geometry check, not a counterfactual kill.
+
+The half-throttle change fixes initial movement at the captured stuck positions,
+but repeated mechanical rollouts still stop at a short route endpoint. Offline
+fine-resolution connectivity finds a ground exit that the coarse route search
+misses. Global escape remains an open limitation; no unverified route or collision
+relaxation is included in this candidate.
+
+The corrected frozen private diagnostic finished **4th with two kills and six
+cubes** at 117.1 seconds. It dealt 6,299 damage, took 2,393 damage and took zero
+zone damage. All 1,166 issued actions computed below 50 ms (maximum 32.24 ms),
+with zero policy errors; six online observations were skipped. It travelled
+1,292 m. The recorded gun finishing episode at 38.0–39.8 seconds stayed on the
+same wounded target and was followed by an observed hit and kill at 39.9 seconds.
+This is an uncontrolled private match with different opponents and world state,
+not an official score or a controlled comparison with the earlier diagnostic.
 
 ## Selective-v4 permission candidate
 

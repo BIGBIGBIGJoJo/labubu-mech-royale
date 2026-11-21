@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import time
 
 from combat import Combat, angle_delta, direction
 
@@ -38,6 +39,11 @@ class Decision:
 class CommittedDecision(Decision):
     finish_deadline: float | None = None
     entry_evidence_at: float | None = None
+
+
+@dataclass(frozen=True)
+class AggressiveDecision(Decision):
+    finish_weapon: str | None = None
 
 
 @dataclass(frozen=True)
@@ -592,3 +598,327 @@ class Engagement:
                             fresh_authorized | {actor["id"]})
         return Decision("OBSERVE", None, False, "no_authorized_mech_target", finish_budget_s=budget,
                         exclusions=tuple(exclusions), authorized_ids=fresh_authorized)
+
+
+class AggressiveEngagement(Engagement):
+    """Proactive target selection; movement owns recovery and pursuit decisions.
+
+    All observed hostiles may take damage. Selection still distinguishes that
+    permission from physically reaching the selected body. A short kill ETA is
+    a conservative <=2s estimate, never a promise about an entire moving duel.
+    """
+    SCORING_SECONDS = .006
+    MAX_SHORT_PROFILES = 6
+    MAX_MORTAR_PROFILES = 2
+
+    def __init__(self, config, line_of_fire=None):
+        super().__init__(config, line_of_fire, ExperimentalPolicy(direct_reachability=True))
+        self.target_id = None
+        self._attack_at = {}
+        self.last_scoring = {}
+        self._world_line_of_fire = line_of_fire
+        self._geometry_deadline = math.inf
+        self._geometry_timeouts = 0
+        self._solution_cache = None
+        self.model.line_of_fire = self._budgeted_clear
+
+    def _budgeted_clear(self, start, end):
+        # A mortar arc contains many rays. Cooperate between those rays rather
+        # than discovering an expired budget after the entire arc completes.
+        if time.perf_counter() >= self._geometry_deadline:
+            self._geometry_timeouts += 1
+            return False
+        return self._world_line_of_fire is None or bool(self._world_line_of_fire(start, end))
+
+    def _solution(self, me, actor, kind, stats, when, own):
+        # Seed and short proof often ask exactly the same first-shot geometry.
+        # Cache only inside this observation, with weapon parameters included.
+        if self._solution_cache is None:
+            return super()._solution(me, actor, kind, stats, when, own)
+        key = (actor["id"], kind, when, tuple(sorted(stats.items())))
+        if key in self._solution_cache:
+            return self._solution_cache[key]
+        before = self._geometry_timeouts
+        result = super()._solution(me, actor, kind, stats, when, own)
+        if self._geometry_timeouts == before:
+            self._solution_cache[key] = result
+        return result
+
+    def _cheap_weapons(self, obs, actor, own, *, mortar=False):
+        """No geometry calls: reject unavailable or clearly distant weapons."""
+        me = obs["self"]
+        distance = math.dist(me["pos"][:2], actor["pos"][:2])
+        target_radius, _ = self.model._body(actor)
+        result = []
+        for weapon in me.get("weapons", ())[:2]:
+            if not weapon or weapon.get("kind") not in ("gun", "laser", "lightning", "mortar"):
+                continue
+            kind = weapon["kind"]
+            if (kind == "mortar") != mortar:
+                continue
+            stats = self.model._stats(weapon)
+            ready = max(0.0, weapon.get("cooldown", 0))
+            if kind == "gun":
+                ready = max(ready, weapon.get("reload", 0))
+                if weapon.get("ammo", 0) <= 0 and weapon.get("reload", 0) <= 0:
+                    ready = max(ready, stats.get("reload", 2.4))
+            elif kind == "laser" and weapon.get("charge", 0) > 0:
+                ready = 0.0
+            elif kind == "lightning" and me.get("energy", 0) < stats.get("energy", 3) + 8:
+                continue
+            if ready > self.DEFENSE_MEMORY:
+                continue
+            # Actor motion can enter range before readiness; this bound only
+            # rejects distances even that most favorable motion cannot cover.
+            motion = math.hypot(*actor.get("vel", (0, 0, 0))[:2]) * self.DEFENSE_MEMORY
+            if kind != "mortar" and distance > stats.get("range", 0) + own["radius"] + target_radius + motion + 1:
+                continue
+            result.append((weapon, stats, ready))
+        return result
+
+    def _short_bound(self, obs, actor, weapons):
+        """Optimistic arithmetic bound only, used to budget exact short checks."""
+        if not self._known_hp(actor):
+            return math.inf
+        me, hp = obs["self"], actor["hp"]
+        cubes = self.config.get("cubes", {})
+        scale = 1 + cubes.get("damage_per_cube", .04) * min(me.get("cubes", 0), cubes.get("stat_cap", 10))
+        best = math.inf
+        for weapon, stats, ready in weapons:
+            kind = weapon["kind"]
+            if kind == "laser":
+                full = stats.get("charge", .75)
+                maximum = self.model.laser_damage_bound(me, stats, actor, full)
+                if maximum + 1e-6 < hp:
+                    continue
+                fraction = stats.get("min_frac", .35)
+                needed = max(stats.get("min_charge", .15), full * (hp / maximum - fraction) / max(1e-8, 1-fraction))
+                best = min(best, max(self.model.sim_dt, ready + max(0, needed-weapon.get("charge", 0))))
+            else:
+                damage = stats.get("damage", 0) * scale
+                if damage <= 0:
+                    continue
+                shots = max(1, math.ceil(hp/damage-1e-9))
+                first = max(self.model.sim_dt, ready)
+                cycle = self._round_time(stats.get("cooldown", .25))
+                if kind == "gun":
+                    magazine = max(1, int(stats.get("mag", 12)))
+                    ammo = magazine if weapon.get("reload", 0) > 0 or weapon.get("ammo", 0) <= 0 else weapon["ammo"]
+                    reloads = 0 if shots <= ammo else 1 + (shots-ammo-1)//magazine
+                    when = first + (shots-1-reloads)*cycle + reloads*self._round_time(stats.get("reload", 2.4))
+                else:
+                    when = first + (shots-1)*cycle
+                best = min(best, when)
+        return best
+
+    def _usable_wait(self, obs, actor, own, weapons, deadline, with_completion=False):
+        best, complete = None, True
+        # Readiness is a lower bound, not the actual wait: aim and shot paths
+        # still need checking. Prune only when this bound cannot improve best.
+        for weapon, stats, ready in sorted(weapons, key=lambda row: row[2]):
+            first = self._round_time(max(self.model.sim_dt, ready))
+            if best is not None and first >= best - 1e-8:
+                continue
+            if time.perf_counter() >= deadline:
+                complete = False
+                break
+            timeouts_before = self._geometry_timeouts
+            kind = weapon["kind"]
+            sol = self._solution(obs["self"], actor, kind, stats, first, own)
+            if not sol or not sol["clear"]:
+                if time.perf_counter() >= deadline:
+                    complete = False
+                    break
+                continue
+            aimed = self._round_time(max(first, self._aim_delay(obs["self"], sol["aim"], own)))
+            if aimed > self.DEFENSE_MEMORY:
+                continue
+            changed = (any(actor.get("vel", (0, 0, 0)))
+                       or (first < self.model.action_dt and any(obs["self"].get("vel", (0, 0, 0))[:2])))
+            if aimed > first + 1e-8 and changed:
+                if time.perf_counter() >= deadline:
+                    complete = False
+                    break
+                sol = self._solution(obs["self"], actor, kind, stats, aimed, own)
+                if not sol or not sol["clear"]:
+                    if time.perf_counter() >= deadline:
+                        complete = False
+                        break
+                    continue
+            if not self._direct_reachable(obs, actor, kind, stats, aimed, sol):
+                continue
+            if kind == "lightning" and not self._lightning_first_target(obs, actor, sol, stats, own):
+                continue
+            if self._geometry_timeouts != timeouts_before:
+                # A timed-out LOS callback is not proof that an intervening
+                # lightning body is occluded or that a later weapon is worse.
+                complete = False
+                break
+            best = min(best, aimed) if best is not None else aimed
+        return (best, complete) if with_completion else best
+
+    def select(self, obs, candidates, recovering=False, deadline=None):
+        started = time.perf_counter()
+        self._solution_cache = {}
+        deadline = min(started + self.SCORING_SECONDS, deadline) if deadline is not None else started + self.SCORING_SECONDS
+        now, me = float(obs.get("t", 0)), obs["self"]
+        if now < self._last_time:
+            self.target_id = None
+            self._attack_at.clear()
+        self._last_time = now
+        killed = {e.get("target") for e in obs.get("events", ()) if e.get("type") == "kill"}
+        current = {a["id"]: a for a in obs.get("mechs", ()) if a.get("kind") == "mech"
+                   and a.get("id") != me["id"] and a.get("hp", 1) > 0 and a["id"] not in killed}
+        authorized = frozenset(current)
+        for event in obs.get("events", ()):
+            if event.get("type") == "damaged" and event.get("weapon") != "zone" and event.get("by") in current:
+                self._attack_at[event["by"]] = now
+        self._attack_at = {key: at for key, at in self._attack_at.items() if now-at < 3 and key not in killed}
+        if self.target_id not in current:
+            self.target_id = None
+        own = self.model._self_stats(me)
+        scored, exclusions, profiles, checked = [], [], {}, set()
+        seen = set()
+        for item in candidates[:16]:
+            actor_id = item["actor"].get("id")
+            if actor_id in seen:
+                continue
+            seen.add(actor_id)
+            actor = current.get(actor_id)
+            if actor is None or not item.get("los", False) or item.get("remembered", False):
+                exclusions.append((actor_id, "not_current_visible_mech"))
+                continue
+            distance = math.dist(me["pos"][:2], actor["pos"][:2])
+            hp = actor.get("hp", actor.get("max_hp", 1400))
+            wounded = max(0, min(1, 1-hp/max(1, actor.get("max_hp", 1400))))
+            score = (2 + item.get("risk", 1) + 1.6*wounded
+                     + (2.5 if hp < 200 and distance < 140 else 0)
+                     + (.7 if actor_id in self._attack_at else 0)
+                     + (.35 if actor_id == self.target_id else 0) - .006*distance)
+            weapons = self._cheap_weapons(obs, actor, own)
+            scored.append((score, actor, weapons, self._short_bound(obs, actor, weapons)))
+        short = []
+        checks = arcs = 0
+        seed_actor, seed_value, seed_complete = None, -math.inf, True
+        seed = None
+        seed_candidates = [row for row in scored if row[2]]
+        if seed_candidates and time.perf_counter() < deadline - .003:
+            # Secure a cheap physically reachable incumbent/near interceptor
+            # before weak enemies consume the short-kill geometry budget.
+            seed = min(seed_candidates, key=lambda row:(row[1]["id"] != self.target_id,
+                       math.dist(me["pos"][:2], row[1]["pos"][:2]), -row[0]))
+            seed_deadline = min(deadline-.003, started+.0025)
+            self._geometry_deadline = seed_deadline
+            wait, seed_complete = self._usable_wait(obs, seed[1], own, seed[2], seed_deadline, with_completion=True)
+            checked.add(seed[1]["id"])
+            if wait is not None:
+                seed_actor, seed_value = seed[1], seed[0]-.4*wait
+                if seed_complete:
+                    profiles[seed_actor["id"]] = (wait, None)
+        charging = any(w and w["kind"] == "laser" and w.get("charge", 0) > 0 for w in me.get("weapons", ()))
+        # Keep time for the healthy interceptor/fallback after tempting weak
+        # targets fail their direct paths. One map query can finish past cutoff.
+        short_deadline = min(deadline - .002, started + .0035)
+        self._geometry_deadline = short_deadline
+        # Lower bounds prune impossible kills without map ray calls. Keep this
+        # shortlist separate from the broad ranking so full-health actors live.
+        for score, actor, weapons, lower in sorted(scored, key=lambda r:(
+                not (charging and r[1]["id"] == self.target_id and r[3] <= self.MAX_FINISH_BUDGET),
+                r[3], r[1].get("hp", math.inf), -r[0], r[1]["id"])):
+            if lower > self.MAX_FINISH_BUDGET or checks >= self.MAX_SHORT_PROFILES or time.perf_counter() >= short_deadline:
+                break
+            if short and lower > min(row[0] for row in short) + 1e-8:
+                break
+            tested, waits = set(), []
+            possible = sorted(((self._short_bound(obs, actor, [row]), row) for row in weapons),
+                              key=lambda row:(row[0], row[1][0]["kind"]))
+            for weapon_lower, row in possible:
+                if (weapon_lower > self.MAX_FINISH_BUDGET or checks >= self.MAX_SHORT_PROFILES
+                        or time.perf_counter() >= short_deadline):
+                    break
+                if short and weapon_lower > min(result[0] for result in short) + 1e-8:
+                    break
+                weapon, stats, ready = row
+                # A reloading gun that cannot finish in time must not consume
+                # the laser's short-proof budget. Never sum shared-aim damage.
+                shadow = {**obs, "self": {**me, "weapons": [weapon, None]}}
+                checks += 1
+                timeouts_before = self._geometry_timeouts
+                profile = self._weapon_profile(shadow, actor, authorized_ids=authorized)
+                checked.add(actor["id"])
+                if self._geometry_timeouts != timeouts_before:
+                    break  # An interrupted ray is neither a kill nor a miss.
+                tested.add(weapon["kind"])
+                if profile[0] is not None:
+                    waits.append(profile[0])
+                if profile[1] is not None:
+                    short.append((profile[1], actor.get("hp", math.inf), actor["id"] != self.target_id,
+                                  math.dist(me["pos"][:2], actor["pos"][:2]), actor["id"], actor, weapon["kind"]))
+            if actor["id"] not in profiles:
+                best_wait = min(waits) if waits else None
+                untested = [row for row in weapons if row[0]["kind"] not in tested]
+                bound = min((self._round_time(max(self.model.sim_dt, row[2])) for row in untested), default=math.inf)
+                if not untested or (best_wait is not None and best_wait <= bound + 1e-8):
+                    # Cache a complete minimum only, not a subset's upper bound.
+                    profiles[actor["id"]] = (best_wait, None)
+        best_actor, finish_eta, finish_weapon, reason = None, None, None, "no_usable_current_mech"
+        self._geometry_deadline = deadline
+        if short:
+            weapon_order = {"gun": 0, "lightning": 1, "laser": 2}
+            best = min(short, key=lambda r:r[:5] + (weapon_order.get(r[6], 3),))
+            best_actor, finish_eta, finish_weapon, reason = best[5], best[0], best[6], "proactive_short_kill"
+            incumbent = min((r for r in short if r[5]["id"] == self.target_id),
+                            key=lambda r:(r[0], weapon_order.get(r[6], 3)), default=None)
+            if charging and incumbent and incumbent[0] <= best[0] + .25:
+                best_actor, finish_eta, finish_weapon = incumbent[5], incumbent[0], incumbent[6]
+        else:
+            if seed_actor is not None and not seed_complete:
+                # A partial seed wait is only an upper bound. Complete it
+                # before comparing readiness penalties against challengers.
+                wait, seed_complete = self._usable_wait(obs, seed_actor, own, seed[2], deadline, with_completion=True)
+                if seed_complete and wait is not None:
+                    seed_value = seed[0]-.4*wait
+                    profiles[seed_actor["id"]] = (wait, None)
+            best_value, best_actor = seed_value, seed_actor
+            if best_actor is not None:
+                reason = "proactive_target_value"
+            for score, actor, weapons, _ in sorted(scored, key=lambda r:(-r[0], r[1]["id"])):
+                if (seed_actor is not None and not seed_complete) or score < best_value or time.perf_counter() >= deadline:
+                    break
+                if actor["id"] in profiles:
+                    wait = profiles[actor["id"]][0]
+                else:
+                    wait = self._usable_wait(obs, actor, own, weapons, deadline)
+                    checked.add(actor["id"])
+                if wait is None:
+                    exclusions.append((actor["id"], "no_usable_direct_weapon"))
+                    continue
+                value = score - .4*wait
+                if value > best_value:
+                    best_value, best_actor, reason = value, actor, "proactive_target_value"
+            # Arcs are a bounded fallback, never a fifteen-target opening scan.
+            if best_actor is None:
+                for _, actor, _, _ in sorted(scored, key=lambda r:(-r[0], r[1]["id"])):
+                    if arcs >= self.MAX_MORTAR_PROFILES or time.perf_counter() >= deadline:
+                        break
+                    weapons = self._cheap_weapons(obs, actor, own, mortar=True)
+                    if not weapons:
+                        continue
+                    arcs += 1
+                    if self._usable_wait(obs, actor, own, weapons, deadline) is not None:
+                        best_actor, reason = actor, "proactive_mortar_path"
+                        break
+        elapsed = (time.perf_counter()-started)*1000
+        self.last_scoring = dict(ms=elapsed, candidates=len(scored), checked=len(checked),
+                                 short_profiles=checks, mortar_profiles=arcs,
+                                 exhausted=time.perf_counter() >= deadline)
+        self._geometry_deadline = math.inf
+        self._solution_cache = None
+        if best_actor is None:
+            if self.last_scoring["exhausted"]:
+                reason = "scoring_budget_exhausted"
+            return Decision("OBSERVE", None, False, reason, exclusions=tuple(exclusions), authorized_ids=authorized)
+        self.target_id = best_actor["id"]
+        return AggressiveDecision("ATTACK", best_actor, True, reason, "current_visible_path", finish_eta=finish_eta,
+                        finish_budget_s=self.MAX_FINISH_BUDGET if finish_eta is not None else 0,
+                        exclusions=tuple(exclusions), authorized_ids=authorized, finish_weapon=finish_weapon)

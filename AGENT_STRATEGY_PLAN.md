@@ -1,5 +1,8 @@
 # Labubu: observe, defend, finish
 
+Historical plan for the previous user objective. The current greedy, aggressive
+objective and three-agent design are in [AGGRESSIVE_PLAN.md](AGGRESSIVE_PLAN.md).
+
 ## Objective and confirmed policy
 
 Aim for an official practice score of **6.0**. The best measured entry is currently **4.75**; this plan has not yet established an improvement.
