@@ -9,6 +9,7 @@ therefore emit one beam: the documented protocol has no charge-cancel action.
 """
 from __future__ import annotations
 
+import copy
 import math
 
 
@@ -58,6 +59,7 @@ class Combat:
         self._mortar_target = None
         self._mortar_until = -1.0
         self._mortar_retry_at = -1.0
+        self.last_report = None
         # Enemy armor is not part of the standard actor observation. Bound it
         # using all configured armor upgrades instead of assuming zero armor.
         armor = max(0.0, float(config.get("mech", {}).get("armor", 0)))
@@ -249,6 +251,9 @@ class Combat:
                 "distance": math.dist(origin, point), "clear": True, "flight": flight}
 
     def plan(self, obs, target, allow_fire=True, emergency=False):
+        # Optional movement consumers may reuse this call's gun geometry.
+        # Clear it before every early return; it is never a firing permission.
+        self.last_report = None
         me = obs["self"]
         weapons = list(me.get("weapons", [None, None]))[:2]
         weapons += [None] * (2 - len(weapons))
@@ -304,6 +309,14 @@ class Combat:
                 sol = self._direct_solution(kind, stats, origin, launch_target, velocity, own["radius"] + 0.5, limits, height)
             if sol:
                 solutions[slot] = sol
+                if kind == "gun":
+                    self.last_report = {
+                        "tick": obs["tick"], "t": now,
+                        "target_id": target.get("id"), "slot": slot,
+                        "pos": tuple(me["pos"]), "actual_aim": tuple(actual),
+                        "action_dt": self.action_dt,
+                        "solution": copy.deepcopy(sol),
+                    }
 
         charging = next((i for i, w in enumerate(weapons)
                          if w and w["kind"] == "laser" and w.get("charge", 0) > 0), None)
