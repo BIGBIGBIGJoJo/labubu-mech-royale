@@ -332,15 +332,14 @@ class StrategyTests(unittest.TestCase):
         threat = {"actor": enemy, "d": 20, "los": True, "risk": 2}
         self.assertIsNone(self.bot.resource_goal(self.obs, [threat]))
 
-    def test_safe_cube_detour_wins_movement_over_a_distant_target(self):
+    def test_active_probe_keeps_target_over_optional_cube_detour(self):
         self.obs["cubes"] = [{"id": 5001, "pos": [0, 15, 0]}]
         self.obs["mechs"] = [self.enemy(150)]
         action = self.bot.act(self.obs)
-        self.assertEqual(self.bot.mode, "loot")
-        self.assertEqual(self.bot.telemetry["goal"], [0, 15, 0])
-        self.assertGreater(action["move"][1], 0.5)
-        self.assertTrue(action["fire"][0],
-                        "Safe resource movement can coexist with a valid distant shot")
+        self.assertEqual(self.bot.mode, "engage")
+        self.assertIsNone(self.bot.resource_key)
+        self.assertNotEqual(self.bot.telemetry["goal"], [0, 15, 0])
+        self.assertTrue(action["fire"][0])
 
     def test_close_enemy_blocks_resource_detour(self):
         self.obs["cubes"] = [{"id": 5001, "pos": [0, 15, 0]}]
@@ -382,12 +381,12 @@ class StrategyTests(unittest.TestCase):
         self.assertLess(action["move"][0], -.5)
         self.assertTrue(action["fire"][0])
 
-    def test_healthy_lightning_loadout_closes_to_use_secondary(self):
+    def test_healthy_lightning_loadout_keeps_initial_probe_ranged(self):
         self.obs["self"]["weapons"][1] = self.weapon("lightning")
         self.obs["mechs"] = [self.enemy(80)]
         action = self.bot.act(self.obs)
-        self.assertGreater(action["move"][0], .5,
-                           "A healthy isolated duel should not keep lightning outside its range")
+        self.assertLess(action["move"][0], -.5)
+        self.assertTrue(action['fire'][0])
 
     def test_pickup_requires_vertical_and_horizontal_reach(self):
         self.obs["pickups"] = [{"id": 8001, "kind": "laser", "pos": [1, 0, 5]}]

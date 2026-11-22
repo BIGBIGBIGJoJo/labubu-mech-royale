@@ -27,13 +27,13 @@ class EconomyTests(unittest.TestCase):
         item.update(values)
         return item
 
-    def test_recovery_collects_cube_along_retreat(self):
+    def test_recovery_keeps_escape_goal_over_optional_cube(self):
         self.obs["self"]["hp"] = 500
         self.obs["mechs"] = [self.enemy(50)]
         self.obs["cubes"] = [{"id": 5001, "pos": [-15, 0, 0]}]
         action = self.bot.act(self.obs)
         self.assertTrue(self.bot.recover)
-        self.assertEqual(self.bot.resource_key, ("cubes", 5001))
+        self.assertIsNone(self.bot.resource_key)
         self.assertLess(action["move"][0], -0.5)
 
     def test_recovery_rejects_cube_toward_close_attacker(self):
@@ -82,13 +82,14 @@ class EconomyTests(unittest.TestCase):
         ]
         self.assertEqual(self.candidate()[3], ("cubes", 5000))
 
-    def test_recovery_can_approach_announced_drop_before_landing(self):
+    def test_recovery_does_not_detour_to_announced_drop(self):
         self.obs["self"]["hp"] = 500
         self.obs["drops"] = [self.drop(100, lands_in=10)]
         action = self.bot.act(self.obs)
         self.assertTrue(self.bot.recover)
-        self.assertEqual(self.bot.resource_key, ("drop", 20000))
-        self.assertGreater(action["move"][0], 0.5)
+        self.assertIsNone(self.bot.resource_key)
+        self.assertEqual(self.bot.mode, 'recover')
+        self.assertEqual(action['move'], [0., 0.])
 
     def test_drop_does_not_cause_long_early_wait(self):
         self.obs["drops"] = [self.drop(100, lands_in=25)]

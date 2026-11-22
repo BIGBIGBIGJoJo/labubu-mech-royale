@@ -48,6 +48,10 @@ def intercept_time(relative, velocity, speed):
 
 
 class Combat:
+    # Experimental release tolerance, motivated by recorded charge=.56 versus
+    # live full-charge=.563. This is not a promised engine quantization rule.
+    LASER_FULL_TOLERANCE_S = .006
+
     def __init__(self, config, line_of_fire=None):
         self.config = config
         self.line_of_fire = line_of_fire
@@ -379,7 +383,9 @@ class Combat:
                 charge = float(weapon.get("charge", 0.0))
                 full = float(stats.get("charge", 0.75))
                 aligned = valid and self._aligned(actual_next, sol, radius, height)
-                if charge >= full - 1e-6:
+                near_full = (charge >= stats.get('min_charge', .15)
+                             and charge >= full-self.LASER_FULL_TOLERANCE_S)
+                if near_full:
                     self._full_since.setdefault(slot, now)
                 else:
                     self._full_since.pop(slot, None)
@@ -387,7 +393,7 @@ class Combat:
                     max_wait = min(0.35, max(0.0, stats.get("hold_s", 2.0) * 0.5))
                     hold_expired = now - self._full_since.get(slot, now) >= max_wait
                     lethal = aligned and self._laser_lethal(me, stats, target, charge)
-                    release = emergency or lethal or (charge >= full - 1e-6 and (aligned or hold_expired))
+                    release = emergency or lethal or (near_full and (aligned or hold_expired))
                     # Invalid target solution (range/pitch) cannot be repaired
                     # by charging longer. Release to restore movement.
                     action["fire"][slot] = bool(not release and sol is not None)

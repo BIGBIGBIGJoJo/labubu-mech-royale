@@ -10,6 +10,7 @@ from arena_map import ArenaMap
 from combat import Combat
 from tactical import TacticalPlanner
 from ground_reachability import GroundReachability, NO, YES
+from duel import DuelController
 
 
 def distance(a, b):
@@ -35,6 +36,7 @@ class Bot:
         self.ground_goal_pending = False
         self.combat = Combat(self.config, self.map.line_of_fire)
         self.tactical = TacticalPlanner(self.config, self.map)
+        self.duel = DuelController(self.config)
         self.slot = hello["slot"]
         self.recover = False
         self.mode = "explore"
@@ -45,6 +47,7 @@ class Bot:
         self.last_weapon_hurt = -100.0
         self.last_combat = -100.0
         self.damage_bearing = None
+        self.damage_bearing_t = -math.inf
         self.last_jump = -100.0
         self.history = deque()
         self.loot = {}
@@ -101,6 +104,7 @@ class Bot:
                         self.recent_attackers[event["by"]] = t
                 if event.get("bearing") is not None:
                     self.damage_bearing = event["bearing"]
+                    self.damage_bearing_t = t
             if event["type"] in ("took", "take_failed"):
                 self.loot.pop(("pickups", event.get("id")), None)
         self.history.append((t, tuple(me["pos"]), math.hypot(*self.last_move)))
@@ -204,7 +208,7 @@ class Bot:
             rank["lightning"] = 4
         return rank
 
-    def defensive_yaw(self, obs, threats):
+    def defensive_yaw(self, obs, threats, recent_damage_yaw=None):
         """Keep several attackers in the front armor arc during a long reload."""
         p, actual = obs["self"]["pos"], obs["self"]["aim"][0]
         incoming = []
@@ -216,7 +220,7 @@ class Bot:
             weight = q["risk"] * (2 if obs["t"] - self.recent_attackers.get(actor["id"], -100) < 3 else 1)
             incoming.append((bearing, weight))
         if not incoming:
-            return actual
+            return actual if recent_damage_yaw is None else recent_damage_yaw
         delta = lambda a, b: (a - b + math.pi) % math.tau - math.pi
         candidates = [actual] + [a for a, _ in incoming]
         for i, (a, _) in enumerate(incoming):
@@ -549,10 +553,6 @@ class Bot:
         threats = self.threats(obs, s)
         visible = [q for q in threats if q["los"] and q["actor"]["kind"] == "mech"]
         hp = me["hp"] / me["max_hp"]
-        if hp < .55 or (len(visible) >= 2 and hp < .82):
-            self.recover = True
-        if hp >= .93 or (obs["zone"]["radius"] < 18 and visible):
-            self.recover = False
         target = self.choose_target(obs, threats)
         zone = obs["zone"]
         center, future_radius = self.zone_future(obs, 12)
@@ -562,7 +562,13 @@ class Bot:
         if self.ground_routes.index is not None and not ground_scope:
             self.ground_goal_pending = True
         urgent = not me["in_zone"] or distance(p, center) + s["radius"] + 8 > future_radius
-        resource = self.resource_goal(obs, threats, deadline=min(deadline - .017, time.perf_counter() + .004)) if not urgent else None
+        duel = self.duel.decide(obs, threats, target, s, urgent=urgent)
+        was_recovering = self.recover
+        self.recover = duel['retreat']
+        if self.recover and not was_recovering:
+            self.goal_until = -1.0
+        # Escaping a fight takes precedence over an attractive loot objective.
+        resource = self.resource_goal(obs, threats, deadline=min(deadline - .017, time.perf_counter() + .004)) if not urgent and not self.recover and duel['phase'] == 'idle' else None
         self.resource_key = resource[3] if resource else None
         if urgent:
             self.mode = "rotate"
@@ -617,7 +623,8 @@ class Bot:
             preferred = 150 if "laser" in held else 120
             if q.get("kind") == "npc":
                 preferred = 35
-            if "lightning" in held and hp > .7 and len(visible) <= 1 and q.get("kind") == "mech":
+            lightning_range = max((w['stats']['range'] for w in me['weapons'] if w and w['kind'] == 'lightning'), default=0)
+            if "lightning" in held and hp > .7 and len(visible) <= 1 and q.get("kind") == "mech" and d <= lightning_range:
                 preferred = 33 if "laser" in q.get("weapons", []) else 38
             if len(visible) >= 2:
                 preferred += 35
@@ -641,12 +648,19 @@ class Bot:
         active_contact = active_contact and any(q["actor"]["id"] == target["id"] and q["los"] for q in threats)
         if target is not None and target.get("kind") == "npc":
             active_contact = t - self.recent_attackers.get(target["id"], -100) < min(3.0, s["regen_delay"]) and not any(q["actor"]["kind"] == "mech" and q["los"] and q["d"] < 90 for q in threats)
-        allow_fire = not self.recover or imminent or active_contact
+        quiet = self.recover and not urgent and self.duel.quiet_healing(
+            obs, threats, s, self.map.line_of_fire, min(deadline-.012, time.perf_counter()+.0006))
+        # Keep the existing defensive-fire windows while escaping, with a
+        # narrow protected-position override to start the regeneration clock.
+        allow_fire = (not self.recover or imminent or active_contact) and not quiet
         combat = self.combat.plan(obs, target, allow_fire=allow_fire, emergency=urgent or self.recover)
         navigation = self.map.navigate(p, goal, s["radius"], s["height"], deadline=deadline - .012)
         if distance(p, goal) < 1.5:
             navigation = (0, 0)
-        motion_weapons = [({**w, "charge": max(.001, w.get("charge", 0)) if combat["fire"][i] else 0}
+        # Releasing a trigger is not an observed charge cancellation: below
+        # min_charge the server continues charging before it emits the beam.
+        # Retain the observed slowdown until a later observation clears charge.
+        motion_weapons = [({**w, "charge": max(w.get("charge", 0), .001 if combat["fire"][i] else 0)}
                            if w and w["kind"] == "laser" else w)
                           for i, w in enumerate(me["weapons"])]
         motion_obs = {**obs, "self": {**me, "weapons": motion_weapons}}
@@ -672,7 +686,8 @@ class Bot:
         if (self.recover and not any(combat["fire"])
                 and not any(w and w.get("charge", 0) > 0 for w in me["weapons"])
                 and any(w and w["kind"] == "gun" and w.get("reload", 0) > .3 for w in me["weapons"])):
-            combat["aim"] = [self.defensive_yaw(obs, threats), 0]
+            recent_yaw = self.damage_bearing if t-self.damage_bearing_t < 3 else None
+            combat["aim"] = [self.defensive_yaw(obs, threats, recent_yaw), 0]
         action = {"tick": obs["tick"], "move": list(move), "boost": boost, "jump": jump, **combat}
         upgrade = self.choose_upgrade(obs)
         if upgrade is not None:
@@ -682,6 +697,8 @@ class Bot:
         self.telemetry = {"mode": self.mode, "goal": goal, "resource": self.resource_key,
                           "target": target.get("id") if target else None,
                           "recover": self.recover, "threats": len(visible), "stuck": stuck,
+                          "duel": {**duel, "quiet_healing": quiet,
+                                   "regen_wait_s": max(0., self.last_combat+s['regen_delay']-t)},
                           "tactical": self.tactical.last_report, "ms": (time.perf_counter() - start) * 1000}
         return action
 
