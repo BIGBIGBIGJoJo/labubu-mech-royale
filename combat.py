@@ -62,6 +62,7 @@ class Combat:
         self._mortar_target = None
         self._mortar_until = -1.0
         self._mortar_retry_at = -1.0
+        self.defensive_laser_start = False
         # Enemy armor is not part of the standard actor observation. Bound it
         # using all configured armor upgrades instead of assuming zero armor.
         armor = max(0.0, float(config.get("mech", {}).get("armor", 0)))
@@ -152,6 +153,66 @@ class Combat:
         pitch_high = math.atan2(center_z + half_height - solution["origin"][2], distance)
         return (abs(angle_delta(solution["aim"][0], actual_next[0])) <= yaw_tolerance
                 and pitch_low <= actual_next[1] <= pitch_high)
+
+    def _defensive_laser_ray_clear(self, actual_aim, solution, muzzle, offset, radius, height, reach):
+        """Admission-only current launch-ray witness for a new escape charge.
+
+        Use the first physics tick's slew toward the FINAL shared aim and the
+        existing solution's constant-velocity target prediction. Current-server
+        beam measurements support horizontal barrel extension at muzzle height.
+        Our future command acceleration and target changes during the minimum
+        charge are not predicted: this cannot guarantee the later beam lands.
+        """
+        if self.line_of_fire is None:
+            return False
+        vec = direction(actual_aim)
+        origin = [muzzle[0]+offset*vec[0], muzzle[1]+offset*vec[1], muzzle[2]]
+        if not self._clear(muzzle, origin):
+            return False
+        point = solution['point']
+        dx, dy = origin[0]-point[0], origin[1]-point[1]
+        a = vec[0]*vec[0]+vec[1]*vec[1]
+        b = 2*(dx*vec[0]+dy*vec[1])
+        c = dx*dx+dy*dy-radius*radius
+        enter, leave = 0., float('inf')
+        if a < 1e-12:
+            if c > 0:
+                return False
+        else:
+            discriminant = b*b-4*a*c
+            if discriminant < 0:
+                return False
+            root = math.sqrt(discriminant)
+            enter = max(enter, (-b-root)/(2*a))
+            leave = min(leave, (-b+root)/(2*a))
+        center_z = solution.get('center_z', point[2])
+        low, high = center_z-height*.5, center_z+height*.5
+        if abs(vec[2]) < 1e-12:
+            if not low <= origin[2] <= high:
+                return False
+        else:
+            z_enter, z_leave = sorted(((low-origin[2])/vec[2], (high-origin[2])/vec[2]))
+            enter, leave = max(enter, z_enter), min(leave, z_leave)
+        if enter > leave or leave < 0 or not math.isfinite(enter) or enter > reach:
+            return False
+        endpoint = [origin[i]+enter*vec[i] for i in range(3)]
+        return self._clear(origin, endpoint)
+
+    def _defensive_laser_finisher(self, me, target, weapon, stats, solution,
+                                 actual_next, own, muzzle, radius, height):
+        hp = target.get('hp')
+        if (target.get('kind') != 'mech' or not isinstance(hp, (int, float))
+                or not math.isfinite(hp) or hp <= 0 or weapon.get('charge', 0) != 0
+                or weapon.get('cooldown', 0) != 0):
+            return False
+        # The exception always prices the maximum legal enemy armor, even
+        # if a nonstandard observation happens to contain an armor estimate.
+        bound = self.laser_damage_bound(me, stats, {**target, 'armor':self.max_enemy_armor},
+                                       stats.get('min_charge', .15))
+        if hp+1e-6 > bound or not self._aligned(actual_next, solution, radius, height):
+            return False
+        return self._defensive_laser_ray_clear(actual_next, solution, muzzle, own['radius']+.5,
+                                               radius, height, stats['range'])
 
     def _direct_solution(self, kind, stats, origin, center, velocity, barrel_offset, limits, target_height):
         speed = float(stats.get("speed", 252.0))
@@ -252,7 +313,8 @@ class Combat:
                 "horizontal": math.dist(origin[:2], point[:2]),
                 "distance": math.dist(origin, point), "clear": True, "flight": flight}
 
-    def plan(self, obs, target, allow_fire=True, emergency=False):
+    def plan(self, obs, target, allow_fire=True, emergency=False, defensive_finisher=False):
+        self.defensive_laser_start = False
         me = obs["self"]
         weapons = list(me.get("weapons", [None, None]))[:2]
         weapons += [None] * (2 - len(weapons))
@@ -400,8 +462,12 @@ class Combat:
                 else:
                     # Charging is useful only with a real shot, and avoid its
                     # movement penalty during root-policy escape decisions.
-                    action["fire"][slot] = bool(ready[slot] and valid and not emergency
+                    finish = (defensive_finisher and emergency and ready[slot] and valid
+                              and self._defensive_laser_finisher(me, target, weapon, stats, sol,
+                                                               actual_next, own, origin, radius, height))
+                    action["fire"][slot] = bool(ready[slot] and valid and (not emergency or finish)
                                                  and abs(angle_delta(sol["aim"][0], actual_next[0])) < 0.6)
+                    self.defensive_laser_start = self.defensive_laser_start or bool(finish and action['fire'][slot])
             elif kind == "lightning":
                 # Lightning checks horizontal yaw only. The documented cone
                 # ambiguity is resolved conservatively as half the full angle.

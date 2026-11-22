@@ -653,7 +653,12 @@ class Bot:
         # Keep the existing defensive-fire windows while escaping, with a
         # narrow protected-position override to start the regeneration clock.
         allow_fire = (not self.recover or imminent or active_contact) and not quiet
-        combat = self.combat.plan(obs, target, allow_fire=allow_fire, emergency=urgent or self.recover)
+        defensive_finisher = (self.recover and allow_fire and not quiet and me['in_zone']
+                              and self.map.available and target is not None and target.get('kind') == 'mech'
+                              and duel['opponents'] == [target['id']]
+                              and any(q['actor']['id'] == target['id'] and q['los'] for q in visible))
+        combat = self.combat.plan(obs, target, allow_fire=allow_fire, emergency=urgent or self.recover,
+                                  defensive_finisher=defensive_finisher)
         navigation = self.map.navigate(p, goal, s["radius"], s["height"], deadline=deadline - .012)
         if distance(p, goal) < 1.5:
             navigation = (0, 0)
@@ -698,6 +703,7 @@ class Bot:
                           "target": target.get("id") if target else None,
                           "recover": self.recover, "threats": len(visible), "stuck": stuck,
                           "duel": {**duel, "quiet_healing": quiet,
+                                   "defensive_laser_start": self.combat.defensive_laser_start,
                                    "regen_wait_s": max(0., self.last_combat+s['regen_delay']-t)},
                           "tactical": self.tactical.last_report, "ms": (time.perf_counter() - start) * 1000}
         return action
