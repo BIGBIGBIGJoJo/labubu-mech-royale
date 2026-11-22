@@ -6,7 +6,7 @@ import time
 from collections import deque
 
 import mechfight as mf
-from arena_map import ArenaMap
+from native_map import ArenaMap
 from combat import Combat
 from tactical import TacticalPlanner
 from zone_resource import ZoneResourcePlanner
