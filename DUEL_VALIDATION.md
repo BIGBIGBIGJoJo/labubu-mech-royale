@@ -40,7 +40,7 @@ Integrated exercised 443 retreat decisions. Its final favorable 142.6–159.3 fi
 
 ## Known limitations retained for the experiment
 
-- C1 recovery goals at 95–102 still include the inherited outgoing/incoming cover mismatch: three of five sampled destinations permit an incoming upper-body ray. This candidate does not change recovery goal ranking and does not promise a successful escape.
+- C1 recovery goals at checkpoints 95, 97, 99, 100, 101 and 102 retain the inherited outgoing/incoming cover mismatch: each selected destination has three of five sampled incoming rays clear. This candidate does not change recovery goal ranking and does not promise a successful escape.
 - Six integrated post-hoc unreachable endpoints were **engage standoff endpoints**, outside the ground-safe-goal guard, not newly unreachable retreat goals. Tactical motion validation remains in place; a goal witness is not proof of actual arrival.
 - All captured replays keep the original movement and enemy behavior. Earlier target exits, different laser release commands, valid routes and smaller local compute times cannot establish extra kills, healing, survival or a higher competition score.
 - The 20-second cap, 25% entry-health cost budget, bounded pending-hit allowance, 1.5-second one-use finish extension and small near-full laser release tolerance are explicit experimental policy choices.
