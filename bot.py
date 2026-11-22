@@ -427,7 +427,7 @@ class Bot:
                 useful = min(count, max(0, cap - me["cubes"]))
                 next_count = me["cubes"] + count
                 threshold = any(me["cubes"] < n <= next_count for n in self.config["cubes"]["upgrade_thresholds"])
-                benefit = 32 * useful + 6 * (count - useful) + (25 if threshold else 0)
+                benefit = 32 * useful + (25 if threshold else 0)
                 if self.recover:
                     benefit += min(me["max_hp"] - me["hp"], cube_gain * useful) * .3
                 add(item, kind, key, benefit, seen)

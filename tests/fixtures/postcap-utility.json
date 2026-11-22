@@ -1,0 +1,66 @@
+{
+  "scope": "Flat unobstructed policy fixtures retain recorded cube count, local group count, horizontal travel and prior-objective continuity. These are scalar reductions, not original map or closed-loop game fixtures. All selected recorded rows have zero risk and fresh observations.",
+  "audit": "POSTCAP_FLAT_UTILITY.json",
+  "cases": [
+    {
+      "name": "kernel_threshold_pile_still_admitted",
+      "trace": "movement-kernel-174e3a1-20261122-135419",
+      "trace_sha256": "70a70f02ee4485315843b59392763173c4692497c655d3b95a4733c758a31509",
+      "t": 129.9,
+      "cubes": 10,
+      "count": 10,
+      "travel": 43.27471548144483,
+      "held": false,
+      "baseline_score": 62.49714794964869,
+      "candidate_score": 2.4971479496486886
+    },
+    {
+      "name": "kernel_no_immediate_threshold_rejected",
+      "trace": "movement-kernel-174e3a1-20261122-135419",
+      "trace_sha256": "70a70f02ee4485315843b59392763173c4692497c655d3b95a4733c758a31509",
+      "t": 146.7,
+      "cubes": 32,
+      "count": 3,
+      "travel": 4.147794594721368,
+      "held": false,
+      "baseline_score": 15.843146810744889,
+      "candidate_score": null
+    },
+    {
+      "name": "reactive_distant_threshold_rejected",
+      "trace": "reactive-recovery-ef74f21-20261122-143827",
+      "trace_sha256": "0612a2363074bb937359f48e79a876b38dfe39b0292caeb4030be6d0d0c92f78",
+      "t": 101.3,
+      "cubes": 12,
+      "count": 5,
+      "travel": 69.41009292602914,
+      "held": false,
+      "baseline_score": 18.90675167846485,
+      "candidate_score": null
+    },
+    {
+      "name": "reactive_near_threshold_admitted",
+      "trace": "reactive-recovery-ef74f21-20261122-143827",
+      "trace_sha256": "0612a2363074bb937359f48e79a876b38dfe39b0292caeb4030be6d0d0c92f78",
+      "t": 104.4,
+      "cubes": 12,
+      "count": 5,
+      "travel": 41.90810542126666,
+      "held": false,
+      "baseline_score": 33.207785180941336,
+      "candidate_score": 3.207785180941336
+    },
+    {
+      "name": "reactive_large_held_pile_still_admitted",
+      "trace": "reactive-recovery-ef74f21-20261122-143827",
+      "trace_sha256": "0612a2363074bb937359f48e79a876b38dfe39b0292caeb4030be6d0d0c92f78",
+      "t": 126.4,
+      "cubes": 22,
+      "count": 10,
+      "travel": 4.524433666217241,
+      "held": true,
+      "baseline_score": 92.64729449356703,
+      "candidate_score": 32.64729449356703
+    }
+  ]
+}
