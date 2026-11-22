@@ -11,6 +11,7 @@ from combat import Combat
 from tactical import TacticalPlanner
 from zone_resource import ZoneResourcePlanner
 from ground_reachability import GroundReachability, NO, YES
+from reload_cover import ReloadCover
 
 
 def distance(a, b):
@@ -37,6 +38,7 @@ class Bot:
         self.combat = Combat(self.config, self.map.line_of_fire)
         self.tactical = TacticalPlanner(self.config, self.map)
         self.zone_resources = ZoneResourcePlanner(self.config, self.map)
+        self.reload_cover = ReloadCover(self.config, self.map, self.combat)
         self.slot = hello["slot"]
         self.recover = False
         self.mode = "explore"
@@ -601,6 +603,13 @@ class Bot:
             if lease["phase"] == "exit":
                 resource = None
         self.resource_key = resource[3] if resource else None
+        stuck = bool(len(self.history) > 8 and t - self.history[0][0] > 1.3 and distance(p, self.history[0][1]) < 1.3 and sum(h[2] for h in self.history) > len(self.history) * .6)
+        seen_actors = {a["id"] for a in obs.get("mechs", ())}
+        unseen_attacker = any(t-seen < min(3., s["regen_delay"]) and actor not in seen_actors
+                              for actor, seen in self.recent_attackers.items())
+        cover_eligible = (not self.recover and not urgent and resource is None and
+                          lease is None and not unseen_attacker and not stuck)
+        target = self.reload_cover.retain_target(obs, target, cover_eligible, s)
         if lease is not None:
             self.mode = "loot" if lease["phase"] == "collect" else "rotate"
         elif urgent:
@@ -685,17 +694,27 @@ class Bot:
             active_contact = t - self.recent_attackers.get(target["id"], -100) < min(3.0, s["regen_delay"]) and not any(q["actor"]["kind"] == "mech" and q["los"] and q["d"] < 90 for q in threats)
         allow_fire = not self.recover or imminent or active_contact
         combat = self.combat.plan(obs, target, allow_fire=allow_fire, emergency=urgent or self.recover)
+        cover_goal = self.reload_cover.step(obs, target, s, cover_eligible and self.mode == "engage",
+                                            deadline=deadline - .013)
+        if cover_goal is not None:
+            goal = cover_goal  # Local cycle only; ordinary held goals and priorities remain intact.
+            self.spacing_boost = False
         motion_stats = {**s, "radius": max(s["radius"], lease["radius"]),
                         "height": max(s["height"], lease["height"])} if lease is not None else s
-        navigation = self.map.navigate(p, goal, motion_stats["radius"], motion_stats["height"], deadline=deadline - .012)
-        if distance(p, goal) < 1.5:
+        # Cover proves this exact short ground connector, so use its direct hint
+        # and avoid navigate's generic one-metre arrival shortcut near shelter.
+        navigation = (unit(goal[0]-p[0], goal[1]-p[1]) if cover_goal is not None else
+                      self.map.navigate(p, goal, motion_stats["radius"], motion_stats["height"], deadline=deadline - .012))
+        cover_stopped = (cover_goal is not None and
+                         self.reload_cover.last_report.get("actual_protected") is True and
+                         distance(p, goal) < self.reload_cover.ARRIVAL)
+        if (cover_goal is None and distance(p, goal) < 1.5) or cover_stopped:
             navigation = (0, 0)
         motion_weapons = [({**w, "charge": max(.001, w.get("charge", 0)) if combat["fire"][i] else 0}
                            if w and w["kind"] == "laser" else w)
                           for i, w in enumerate(me["weapons"])]
         motion_obs = {**obs, "self": {**me, "weapons": motion_weapons}}
         move, boost = self.movement(motion_obs, navigation, threats, motion_stats, urgent, deadline, goal)
-        stuck = bool(len(self.history) > 8 and t - self.history[0][0] > 1.3 and distance(p, self.history[0][1]) < 1.3 and sum(h[2] for h in self.history) > len(self.history) * .6)
         jump = False
         if stuck:
             if resource:
@@ -730,6 +749,7 @@ class Bot:
                           "target": target.get("id") if target else None,
                           "recover": self.recover, "threats": len(visible), "stuck": stuck,
                           "zone_resource": {**self.zone_resources.last_report, "active": self.zone_resources.lease_key is not None},
+                          "reload_cover": self.reload_cover.last_report,
                           "tactical": self.tactical.last_report, "ms": (time.perf_counter() - start) * 1000}
         return action
 
