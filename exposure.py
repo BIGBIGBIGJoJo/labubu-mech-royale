@@ -167,13 +167,16 @@ class ExposureModel:
                               indirect_unknown, tuple(reasons))
 
     def incoming(self, me, actor, *, position=None, effective_stats=None,
-                 deadline=None, max_rays=2, include_width=False):
+                 deadline=None, max_rays=2, include_width=False, conservative_only=False):
         """Enemy muzzle -> our body at current or proposed feet position.
 
         effective_stats, if passed, must already contain the cube-scaled body
         dimensions (e.g. Bot.stats(me)); otherwise live observation stats are
         interpreted using self_stats(). Missing/unknown weapons and mortar
         prevent a blocked straight-ray result from declaring the actor safe.
+        conservative_only skips direct samples when unmodeled weapons already
+        force binary risk. It preserves uncertainty, not direct-visibility detail;
+        callers needing clear/blocked samples must keep the default False.
         """
         stats = effective_stats if effective_stats is not None else self.self_stats(me)
         position = me['pos'] if position is None else position
@@ -185,6 +188,12 @@ class ExposureModel:
         indirect = unknown_weapons or 'mortar' in (kinds or ())
         if kinds == []:
             return ExposureResult(0, 0, 0, reasons=('no_held_weapon',))
+        if conservative_only and indirect:
+            # Every possible direct-ray result still has conservative_fraction=1.
+            # This query is fully priced as uncertain; no geometry deadline or
+            # ray-budget failure occurred, so do not fabricate either reason.
+            return ExposureResult(0, 0, 4 if include_width else 2,
+                                  indirect_unknown=True, reasons=('unmodeled_weapon_path',))
         if kinds is not None and not any(kind in ('gun', 'laser', 'lightning', 'npc') for kind in kinds):
             return ExposureResult(0, 0, 2, indirect_unknown=True,
                                   reasons=('unmodeled_weapon_path',))

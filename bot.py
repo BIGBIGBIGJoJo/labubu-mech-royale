@@ -273,7 +273,7 @@ class Bot:
                 else:
                     result = self.recovery_exposure.incoming(
                         me, actor, position=point, effective_stats=effective_stats,
-                        deadline=deadline, max_rays=4, include_width=True)
+                        deadline=deadline, max_rays=4, include_width=True, conservative_only=True)
                     exposed = result.visible is not False
                     self._last_recovery_samples.append(dict(id=actor['id'], visible=result.visible,
                         rays=result.rays, reasons=list(result.reasons)))
