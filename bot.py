@@ -11,6 +11,7 @@ from combat import Combat
 from tactical import TacticalPlanner
 from zone_resource import ZoneResourcePlanner
 from ground_reachability import GroundReachability, NO, YES
+from reactive_recovery import ReactiveRecovery
 
 
 def distance(a, b):
@@ -37,6 +38,7 @@ class Bot:
         self.combat = Combat(self.config, self.map.line_of_fire)
         self.tactical = TacticalPlanner(self.config, self.map)
         self.zone_resources = ZoneResourcePlanner(self.config, self.map)
+        self.reactive_recovery = ReactiveRecovery(self.map, self.zone_resources)
         self.slot = hello["slot"]
         self.recover = False
         self.mode = "explore"
@@ -88,6 +90,7 @@ class Bot:
 
     def update(self, obs):
         t, me = obs["t"], obs["self"]
+        self.reactive_recovery.observe(obs)
         if t >= self.visit_t + 1:
             cell = (int(me["pos"][0] // 35), int(me["pos"][1] // 35))
             self.visited[cell] = self.visited.get(cell, 0) + 1
@@ -611,12 +614,31 @@ class Bot:
             self.mode = "recover"
         else:
             self.mode = "engage" if target else "position"
+        reactive_allowed = (self.mode == "recover" and not urgent and resource is None
+                            and lease is None and not threats and not obs.get("mechs"))
+        reactive_center, reactive_radius = self.zone_future(obs, 22)
+        reactive_owned = self.reactive_recovery.goal
+        if reactive_owned is not None:
+            state = self.reactive_recovery.maintain(obs, s, self.recent_attackers, reactive_allowed,
+                                                   reactive_center, reactive_radius, deadline-.013)
+            if state == "cancel" and self.goal == reactive_owned:
+                self.goal_until = -1  # A canceled relocation must not become a held ordinary goal.
         if lease is not None:
             goal = lease["goal"]
             self.goal, self.goal_kind = goal, self.mode
         elif urgent or (self.recover and not resource) or (not target and not resource):
             refresh_goal = (self.goal is None or t >= self.goal_until or
                             self.goal_kind != self.mode or distance(self.goal, center) > future_radius)
+            attempted, reactive_goal = self.reactive_recovery.select(
+                obs, s, self.recent_attackers, reactive_allowed and self.goal_kind == "recover",
+                self.goal, self.last_move, reactive_center, reactive_radius, self.tactical.horizon,
+                lambda point: self.position_cost(point, threats, reactive_center, reactive_radius,
+                                                 s["radius"], True, s["muzzle_height"]), deadline-.013)
+            if reactive_goal is not None:
+                refresh_goal = False  # Only a completed witness replaces ordinary goal refresh.
+                self.goal = reactive_goal
+                self.goal_until = self.reactive_recovery.active["until"]
+                self.goal_kind = self.mode
             if not refresh_goal and ground_scope and self.ground_goal_pending:
                 # An airborne UNKNOWN is provisional. Recheck a held safe goal
                 # when the ground graph applies again, within the same budget.
@@ -730,6 +752,7 @@ class Bot:
                           "target": target.get("id") if target else None,
                           "recover": self.recover, "threats": len(visible), "stuck": stuck,
                           "zone_resource": {**self.zone_resources.last_report, "active": self.zone_resources.lease_key is not None},
+                          "reactive_recovery": dict(self.reactive_recovery.last_report),
                           "tactical": self.tactical.last_report, "ms": (time.perf_counter() - start) * 1000}
         return action
 
