@@ -150,6 +150,9 @@ class Combat:
                 and pitch_low <= actual_next[1] <= pitch_high)
 
     def _direct_solution(self, kind, stats, origin, center, velocity, barrel_offset, limits, target_height):
+        if kind in ("gun", "laser"):
+            return self._horizontal_solution(kind, stats, origin, center, velocity,
+                                             barrel_offset, limits, target_height)
         speed = float(stats.get("speed", 252.0))
         # All shots have a small muzzle extension. Re-solve the gun intercept
         # twice after applying it; a translated origin matters at close range.
@@ -198,6 +201,98 @@ class Combat:
                 alternate_origin = [origin[i] + barrel_offset * vec[i] for i in range(3)]
                 alternate_distance = math.dist(alternate_origin, alternate)
                 if alternate_distance > stats.get("range", 230.0):
+                    continue
+                predicted, shot_origin, aim = alternate, alternate_origin, alternate_aim
+                distance, clear = alternate_distance, True
+                break
+        return {"aim": aim, "point": predicted, "origin": shot_origin,
+                "horizontal": math.dist(shot_origin[:2], predicted[:2]),
+                "distance": distance, "clear": clear, "flight": flight, "center_z": center_z}
+
+    @staticmethod
+    def _barrel_origin(muzzle, aim, offset):
+        # Recorded beam starts/newborn bullets extend in x/y, including the
+        # cos(pitch) factor, while retaining muzzle Z.
+        vec = direction(aim)
+        return [muzzle[0] + offset*vec[0], muzzle[1] + offset*vec[1], muzzle[2]]
+
+    @classmethod
+    def _barrel_aim(cls, muzzle, point, offset):
+        """Bounded pitch solve with a forward-ray/residual certificate."""
+        if not all(math.isfinite(v) for v in (*muzzle, *point, offset)) or offset < 0:
+            return None
+        dx, dy, dz = (point[i]-muzzle[i] for i in range(3))
+        horizontal = math.hypot(dx, dy)
+        pitch = math.atan2(dz, max(1e-6, horizontal-offset))
+        # dz = D*tan(pitch) - offset*sin(pitch).
+        for _ in range(5):
+            pitch = max(-1.55, min(1.55, pitch))
+            cosine = math.cos(pitch)
+            derivative = horizontal/(cosine*cosine) - offset*cosine
+            if not math.isfinite(derivative) or abs(derivative) < 1e-8:
+                return None
+            pitch -= (horizontal*math.tan(pitch)-offset*math.sin(pitch)-dz)/derivative
+            if not math.isfinite(pitch):
+                return None
+        if not -1.55 <= pitch <= 1.55:
+            return None
+        aim = [math.atan2(dy, dx), pitch]
+        launch = cls._barrel_origin(muzzle, aim, offset)
+        vec = direction(aim)
+        relative = [point[i]-launch[i] for i in range(3)]
+        if sum(relative[i]*vec[i] for i in range(3)) <= 1e-8:
+            return None
+        actual = point_aim(launch, point)
+        if (abs(angle_delta(actual[0], aim[0])) > 1e-6 or
+                abs(actual[1]-aim[1]) > 1e-6):
+            return None
+        return aim
+
+    def _horizontal_solution(self, kind, stats, origin, center, velocity, barrel_offset, limits, target_height):
+        speed, reach = float(stats.get("speed", 252.0)), float(stats.get("range", 230.0))
+        if (not all(math.isfinite(v) for v in (*origin, *center, *velocity, barrel_offset,
+                                              *limits, target_height, speed, reach)) or
+                barrel_offset < 0 or target_height < 0 or speed <= 0 or reach <= 0 or
+                limits[0] > limits[1]):
+            return None
+        shot_origin = list(origin)
+        flight = 0.0
+        for _ in range(4):
+            if kind == "gun":
+                flight = intercept_time([center[i]-shot_origin[i] for i in range(3)], velocity, speed)
+                if flight is None or not math.isfinite(flight):
+                    return None
+            predicted = [center[i]+velocity[i]*flight for i in range(3)]
+            center_z = predicted[2]
+            horizontal = math.dist(origin[:2], predicted[:2])
+            low = max(center_z-target_height*.40,
+                      origin[2]+math.tan(limits[0])*horizontal-barrel_offset*math.sin(limits[0]))
+            high = min(center_z+target_height*.40,
+                       origin[2]+math.tan(limits[1])*horizontal-barrel_offset*math.sin(limits[1]))
+            if low > high+1e-8:
+                return None
+            predicted[2] = max(low, min(high, center_z))
+            aim = self._barrel_aim(origin, predicted, barrel_offset)
+            if aim is None:
+                return None
+            shot_origin = self._barrel_origin(origin, aim, barrel_offset)
+        distance = math.dist(shot_origin, predicted)
+        if distance > reach or not limits[0]-1e-7 <= aim[1] <= limits[1]+1e-7:
+            return None
+        clear = self._clear(origin, shot_origin) and self._clear(shot_origin, predicted)
+        if not clear:
+            # Preserve existing body-point order. A bridge can block the upper
+            # body while the corrected lower ray is a useful firing solution.
+            for fraction in (.39, -.39):
+                alternate = [predicted[0], predicted[1], center_z+target_height*fraction]
+                alternate_aim = self._barrel_aim(origin, alternate, barrel_offset)
+                if alternate_aim is None or not limits[0] <= alternate_aim[1] <= limits[1]:
+                    continue
+                alternate_origin = self._barrel_origin(origin, alternate_aim, barrel_offset)
+                alternate_distance = math.dist(alternate_origin, alternate)
+                if alternate_distance > reach:
+                    continue
+                if not self._clear(origin, alternate_origin) or not self._clear(alternate_origin, alternate):
                     continue
                 predicted, shot_origin, aim = alternate, alternate_origin, alternate_aim
                 distance, clear = alternate_distance, True

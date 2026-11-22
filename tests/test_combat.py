@@ -139,7 +139,14 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(action["fire"], [False, False])
 
     def test_upper_body_can_be_targeted_over_low_cover(self):
-        controller = combat.Combat(CONFIG, lambda a, b: b[2] >= 8.0)
+        def low_wall(a, b):
+            # A world segment callback must also accept the short clear barrel
+            # prefix; endpoint-height-only stubs incorrectly block that prefix.
+            if min(a[0], b[0]) <= 90 <= max(a[0], b[0]) and a[0] != b[0]:
+                f = (90-a[0])/(b[0]-a[0])
+                return a[2]+f*(b[2]-a[2]) > 7.8
+            return True
+        controller = combat.Combat(CONFIG, low_wall)
         obs = observation(weapon("gun"))
         action = controller.plan(obs, enemy())
         self.assertGreater(action["aim"][1], 0.0)

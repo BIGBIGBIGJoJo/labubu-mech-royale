@@ -1,0 +1,3983 @@
+{
+  "gun_moving": {
+    "config": {
+      "match": {
+        "tick_hz": 20,
+        "decide_every": 2,
+        "duration_s": 240,
+        "mechs": 16,
+        "spawn_min_separation": 130,
+        "spawn_zone_fraction": 0.8,
+        "arena_margin": 30
+      },
+      "bot": {
+        "tick_budget_ms": 50,
+        "hello_budget_ms": 20000,
+        "coast_s": 1,
+        "offer_timeout_s": 5,
+        "max_line_bytes": 65536
+      },
+      "mech": {
+        "radius": 2.5,
+        "height": 9,
+        "eye_height": 8,
+        "muzzle_height": 7,
+        "hp": 1400,
+        "walk_speed": 11.7,
+        "boost_speed": 19.5,
+        "ground_accel": 58.5,
+        "air_accel": 12,
+        "gravity": 22,
+        "jump_speed": 11,
+        "jet_accel": 34,
+        "max_rise_speed": 10,
+        "step_up": 1.2,
+        "max_slope_deg": 50,
+        "energy": 100,
+        "energy_regen": 18,
+        "energy_regen_delay": 0.6,
+        "boost_drain": 17,
+        "jet_drain": 15,
+        "turn_rate": 4,
+        "pitch_rate": 3,
+        "min_pitch": -0.7,
+        "max_pitch": 1.3,
+        "regen_delay": 5,
+        "regen_per_s": 45,
+        "charge_move_mult": 0.5,
+        "self_damage_mult": 0.5,
+        "armor": 0,
+        "rear_mult": 1.5,
+        "front_arc_deg": 180,
+        "near_range_bonus": 0,
+        "vision_bonus": 0,
+        "hearing": 1
+      },
+      "vision": {
+        "range": 200,
+        "fov_deg": 120,
+        "near_range": 45,
+        "canopy_blocks": true,
+        "show_enemy_hp": true,
+        "memory_s": 5
+      },
+      "sound": {
+        "bearing_noise_deg": 7,
+        "near": 60,
+        "mid": 160,
+        "step_speed": 5,
+        "step_every": 0.6,
+        "range": {
+          "step": 40,
+          "boost": 90,
+          "reload": 60,
+          "gun": 320,
+          "mortar": 420,
+          "explosion": 420,
+          "laser_charge": 140,
+          "laser": 380,
+          "lightning": 160,
+          "jet": 90,
+          "death": 600,
+          "crate": 220,
+          "npc_gun": 200,
+          "drop": 600
+        }
+      },
+      "weapons": {
+        "gun": {
+          "damage": 45,
+          "cooldown": 0.24,
+          "speed": 252,
+          "range": 230,
+          "spread_deg": 0.6,
+          "mag": 12,
+          "reload": 2.4
+        },
+        "mortar": {
+          "damage": 200,
+          "splash": 160,
+          "splash_radius": 7,
+          "splash_edge": 0.3,
+          "cooldown": 2.6,
+          "speed": 72,
+          "gravity": 22,
+          "ttl": 7,
+          "knock": 16,
+          "knock_up": 9,
+          "drain": 45
+        },
+        "laser": {
+          "damage": 315,
+          "charge": 0.75,
+          "min_charge": 0.15,
+          "min_frac": 0.35,
+          "hold_s": 2,
+          "cooldown": 1.65,
+          "range": 280,
+          "pierce": 0,
+          "charge_turn_mult": 1,
+          "cookoff": 0.6
+        },
+        "lightning": {
+          "damage": 60,
+          "cooldown": 0.25,
+          "range": 45,
+          "cone_deg": 30,
+          "chain": 2,
+          "chain_range": 14,
+          "chain_falloff": 0.7,
+          "energy": 3,
+          "short_s": 2
+        }
+      },
+      "projectile": {
+        "gun_radius": 0.3,
+        "npc_radius": 0.3
+      },
+      "cubes": {
+        "pickup_radius": 3.5,
+        "hp_per_cube": 0.04,
+        "damage_per_cube": 0.04,
+        "stat_cap": 10,
+        "death_drop_extra": 2,
+        "size_per_cube": 0.05,
+        "upgrade_thresholds": [
+          1,
+          3,
+          6,
+          10,
+          15,
+          21,
+          28,
+          36,
+          45
+        ]
+      },
+      "crates": {
+        "count": 36,
+        "roof_fraction": 0.25,
+        "hp": 300,
+        "radius": 1.4,
+        "height": 2.4,
+        "cubes": 1
+      },
+      "loot": {
+        "pickup_radius": 4,
+        "equip_s": 1,
+        "floor_count": 40,
+        "floor_roof_fraction": 0.25,
+        "crate_weapon_chance": 0.5,
+        "death_drop": 1,
+        "weights": {
+          "gun": 0,
+          "mortar": 1,
+          "laser": 1,
+          "lightning": 1
+        }
+      },
+      "npc": {
+        "count": 12,
+        "hp": 350,
+        "radius": 1.8,
+        "height": 3.5,
+        "speed": 5,
+        "leash": 30,
+        "chase_leash": 60,
+        "aggro_range": 45,
+        "deaggro_range": 90,
+        "spawn_clear": 90,
+        "damage": 25,
+        "cooldown": 1,
+        "projectile_speed": 90,
+        "spread_deg": 2.5,
+        "cubes": 2
+      },
+      "drops": {
+        "times": [
+          35,
+          70,
+          105
+        ],
+        "fall_s": 12.5,
+        "radius": 8,
+        "capture_s": 4,
+        "cubes": 3,
+        "repair": 1,
+        "spread": 0.7
+      },
+      "zone": {
+        "start_center": [
+          41.3,
+          -72.8
+        ],
+        "start_radius": 560,
+        "phases": [
+          {
+            "hold_s": 30,
+            "shrink_s": 25,
+            "radius": 380,
+            "dps": 20
+          },
+          {
+            "hold_s": 22.5,
+            "shrink_s": 20,
+            "radius": 240,
+            "dps": 35
+          },
+          {
+            "hold_s": 17.5,
+            "shrink_s": 17.5,
+            "radius": 140,
+            "dps": 60
+          },
+          {
+            "hold_s": 15,
+            "shrink_s": 15,
+            "radius": 70,
+            "dps": 100
+          },
+          {
+            "hold_s": 12.5,
+            "shrink_s": 12.5,
+            "radius": 25,
+            "dps": 160
+          },
+          {
+            "hold_s": 7.5,
+            "shrink_s": 12.5,
+            "radius": 0,
+            "dps": 260
+          }
+        ]
+      },
+      "debug": {
+        "max_lines": 64,
+        "max_points": 64,
+        "max_text": 16,
+        "max_text_chars": 80,
+        "max_bytes": 8192,
+        "max_match_bytes": 8000000,
+        "hold_s": 0.5
+      },
+      "replay": {
+        "frame_every": 2
+      },
+      "upgrades": [
+        {
+          "id": "plating",
+          "name": "Composite plating",
+          "desc": "+15% max HP",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.hp",
+              "mul": 1.15
+            }
+          ]
+        },
+        {
+          "id": "armor",
+          "name": "Reactive armor",
+          "desc": "-8% damage taken",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.armor",
+              "add": 0.08
+            }
+          ]
+        },
+        {
+          "id": "servos",
+          "name": "Leg servos",
+          "desc": "+8% walk and boost speed",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.walk_speed",
+              "mul": 1.08
+            },
+            {
+              "path": "mech.boost_speed",
+              "mul": 1.08
+            }
+          ]
+        },
+        {
+          "id": "capacitor",
+          "name": "Capacitor bank",
+          "desc": "+30 max energy",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.energy",
+              "add": 30
+            }
+          ]
+        },
+        {
+          "id": "reactor",
+          "name": "Reactor tune",
+          "desc": "+30% energy regen",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.energy_regen",
+              "mul": 1.3
+            }
+          ]
+        },
+        {
+          "id": "jets",
+          "name": "Efficient jets",
+          "desc": "-25% boost and jet energy drain",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.boost_drain",
+              "mul": 0.75
+            },
+            {
+              "path": "mech.jet_drain",
+              "mul": 0.75
+            }
+          ]
+        },
+        {
+          "id": "nanites",
+          "name": "Repair nanites",
+          "desc": "+60% out-of-combat regen, starts 1.5 s sooner",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.regen_per_s",
+              "mul": 1.6
+            },
+            {
+              "path": "mech.regen_delay",
+              "add": -1.5
+            }
+          ]
+        },
+        {
+          "id": "gyros",
+          "name": "Torso gyros",
+          "desc": "+30% aim turn rate",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.turn_rate",
+              "mul": 1.3
+            },
+            {
+              "path": "mech.pitch_rate",
+              "mul": 1.3
+            }
+          ]
+        },
+        {
+          "id": "sensors",
+          "name": "Sensor suite",
+          "desc": "+15 m proximity sensors, +25 m vision, halves sound bearing error",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.near_range_bonus",
+              "add": 15
+            },
+            {
+              "path": "mech.vision_bonus",
+              "add": 25
+            },
+            {
+              "path": "mech.hearing",
+              "mul": 0.5
+            }
+          ]
+        },
+        {
+          "id": "gun_damage",
+          "name": "Tungsten rounds",
+          "desc": "+15% arm gun damage",
+          "requires": "gun",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.gun.damage",
+              "mul": 1.15
+            }
+          ]
+        },
+        {
+          "id": "gun_rate",
+          "name": "Rotary feed",
+          "desc": "+15% arm gun fire rate",
+          "requires": "gun",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.gun.cooldown",
+              "mul": 0.87
+            }
+          ]
+        },
+        {
+          "id": "gun_velocity",
+          "name": "Rail barrel",
+          "desc": "+25% arm gun projectile speed",
+          "requires": "gun",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.gun.speed",
+              "mul": 1.25
+            },
+            {
+              "path": "weapons.gun.range",
+              "mul": 1.15
+            }
+          ]
+        },
+        {
+          "id": "gun_mag",
+          "name": "Drum magazine",
+          "desc": "+8 rounds, -20% reload time",
+          "requires": "gun",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.gun.mag",
+              "add": 8
+            },
+            {
+              "path": "weapons.gun.reload",
+              "mul": 0.8
+            }
+          ]
+        },
+        {
+          "id": "mortar_splash",
+          "name": "Cluster shells",
+          "desc": "+30% mortar splash radius",
+          "requires": "mortar",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.mortar.splash_radius",
+              "mul": 1.3
+            }
+          ]
+        },
+        {
+          "id": "mortar_reload",
+          "name": "Autoloader",
+          "desc": "-18% mortar cooldown",
+          "requires": "mortar",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.mortar.cooldown",
+              "mul": 0.82
+            }
+          ]
+        },
+        {
+          "id": "mortar_velocity",
+          "name": "Long tube",
+          "desc": "+20% shell speed",
+          "requires": "mortar",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.mortar.speed",
+              "mul": 1.2
+            }
+          ]
+        },
+        {
+          "id": "laser_charge",
+          "name": "Fast capacitors",
+          "desc": "-25% laser charge time",
+          "requires": "laser",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.laser.charge",
+              "mul": 0.75
+            }
+          ]
+        },
+        {
+          "id": "laser_damage",
+          "name": "Focusing lens",
+          "desc": "+18% laser damage",
+          "requires": "laser",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.laser.damage",
+              "mul": 1.18
+            }
+          ]
+        },
+        {
+          "id": "laser_pierce",
+          "name": "Phased beam",
+          "desc": "Laser passes through one more target",
+          "requires": "laser",
+          "max": 1,
+          "effects": [
+            {
+              "path": "weapons.laser.pierce",
+              "add": 1
+            }
+          ]
+        },
+        {
+          "id": "lightning_chain",
+          "name": "Arc relay",
+          "desc": "+1 lightning chain jump",
+          "requires": "lightning",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.lightning.chain",
+              "add": 1
+            }
+          ]
+        },
+        {
+          "id": "lightning_range",
+          "name": "Tesla coil",
+          "desc": "+20% lightning range and cone",
+          "requires": "lightning",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.lightning.range",
+              "mul": 1.2
+            },
+            {
+              "path": "weapons.lightning.cone_deg",
+              "mul": 1.2
+            }
+          ]
+        },
+        {
+          "id": "lightning_efficiency",
+          "name": "Superconductor",
+          "desc": "-35% lightning energy cost, +10% damage",
+          "requires": "lightning",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.lightning.energy",
+              "mul": 0.65
+            },
+            {
+              "path": "weapons.lightning.damage",
+              "mul": 1.1
+            }
+          ]
+        }
+      ]
+    },
+    "obs": {
+      "type": "obs",
+      "tick": 2248,
+      "t": 112.4,
+      "alive": 2,
+      "self": {
+        "id": 0,
+        "pos": [
+          -108.97,
+          48.67,
+          -4.4
+        ],
+        "vel": [
+          -19.48,
+          0.87,
+          0
+        ],
+        "aim": [
+          -0.776,
+          0.04
+        ],
+        "hp": 1400,
+        "max_hp": 1400,
+        "energy": 94.9,
+        "max_energy": 100,
+        "grounded": true,
+        "cubes": 0,
+        "upgrades": [],
+        "weapons": [
+          {
+            "kind": "gun",
+            "cooldown": 0,
+            "stats": {
+              "damage": 45,
+              "cooldown": 0.24,
+              "speed": 252,
+              "range": 230,
+              "spread_deg": 0.6,
+              "mag": 12,
+              "reload": 2.4
+            },
+            "ammo": 10,
+            "reload": 0.05
+          },
+          null
+        ],
+        "in_zone": true,
+        "stats": {
+          "radius": 2.5,
+          "height": 9,
+          "eye_height": 8,
+          "muzzle_height": 7,
+          "hp": 1400,
+          "walk_speed": 11.7,
+          "boost_speed": 19.5,
+          "ground_accel": 58.5,
+          "air_accel": 12,
+          "gravity": 22,
+          "jump_speed": 11,
+          "jet_accel": 34,
+          "max_rise_speed": 10,
+          "step_up": 1.2,
+          "max_slope_deg": 50,
+          "energy": 100,
+          "energy_regen": 18,
+          "energy_regen_delay": 0.6,
+          "boost_drain": 17,
+          "jet_drain": 15,
+          "turn_rate": 4,
+          "pitch_rate": 3,
+          "min_pitch": -0.7,
+          "max_pitch": 1.3,
+          "regen_delay": 5,
+          "regen_per_s": 45,
+          "charge_move_mult": 0.5,
+          "self_damage_mult": 0.5,
+          "armor": 0,
+          "rear_mult": 1.5,
+          "front_arc_deg": 180,
+          "near_range_bonus": 0,
+          "vision_bonus": 0,
+          "hearing": 1
+        }
+      },
+      "mechs": [
+        {
+          "id": 12,
+          "kind": "mech",
+          "pos": [
+            -4.44,
+            -52.38,
+            0.6
+          ],
+          "vel": [
+            -2.84,
+            -5.11,
+            0
+          ],
+          "aim": [
+            2.388,
+            0.058
+          ],
+          "hp": 894.65,
+          "max_hp": 2980.91,
+          "cubes": 16,
+          "weapons": [
+            "gun",
+            "laser"
+          ],
+          "charging": true
+        }
+      ],
+      "projectiles": [
+        {
+          "id": 1198,
+          "kind": "gun",
+          "pos": [
+            -34.97,
+            -22.17,
+            13.98
+          ],
+          "vel": [
+            -181.42,
+            174.83,
+            5.29
+          ]
+        }
+      ],
+      "crates": [
+        {
+          "id": 1004,
+          "pos": [
+            -40.4,
+            44.41,
+            3.81
+          ],
+          "hp": 255
+        }
+      ],
+      "cubes": [
+        {
+          "id": 5063,
+          "pos": [
+            -98.76,
+            33.18,
+            -4.47
+          ]
+        }
+      ],
+      "pickups": [
+        {
+          "id": 8053,
+          "kind": "laser",
+          "pos": [
+            -111.22,
+            48.77,
+            -4.47
+          ]
+        },
+        {
+          "id": 8057,
+          "kind": "lightning",
+          "pos": [
+            -101.46,
+            35.28,
+            -4.54
+          ]
+        }
+      ],
+      "sounds": [],
+      "beams": [],
+      "events": [],
+      "zone": {
+        "center": [
+          -99.83,
+          -80.65
+        ],
+        "radius": 240,
+        "next_center": [
+          -17.41,
+          -72.02
+        ],
+        "next_radius": 140,
+        "shrink_start": 115,
+        "shrink_end": 132.5,
+        "dps": 60
+      },
+      "offer": null,
+      "drops": [
+        {
+          "id": 20002,
+          "pos": [
+            -43.47,
+            -154.36,
+            -0.54
+          ],
+          "radius": 8,
+          "lands_in": 5.1,
+          "capture_s": 4,
+          "progress": 0,
+          "holder": null
+        }
+      ]
+    },
+    "target": {
+      "id": 12,
+      "kind": "mech",
+      "pos": [
+        -4.44,
+        -52.38,
+        0.6
+      ],
+      "vel": [
+        -2.84,
+        -5.11,
+        0
+      ],
+      "aim": [
+        2.388,
+        0.058
+      ],
+      "hp": 894.65,
+      "max_hp": 2980.91,
+      "cubes": 16,
+      "weapons": [
+        "gun",
+        "laser"
+      ],
+      "charging": true
+    },
+    "baseline_action": {
+      "aim": [
+        -0.7923761454518023,
+        0.04165257596742564
+      ],
+      "fire": [
+        true,
+        false
+      ],
+      "reload": false
+    },
+    "poses": [
+      {
+        "model": "current_recorded_pose",
+        "seconds": 0.0,
+        "muzzle": [
+          -108.97,
+          48.67,
+          2.5999999999999996
+        ]
+      },
+      {
+        "model": "no_charge",
+        "seconds": 0.05,
+        "muzzle": [
+          -109.79789776401486,
+          48.70692739472173,
+          2.5692919112810575
+        ],
+        "physics_state": [
+          0.05,
+          -109.79789776401486,
+          48.70692739472173,
+          -4.4307080887189425,
+          -16.557955280297303,
+          0.7385478944345881,
+          0.0,
+          94.9,
+          true
+        ],
+        "nominal_firing_tick": true
+      },
+      {
+        "model": "no_charge",
+        "seconds": 0.1,
+        "muzzle": [
+          -110.47969329204459,
+          48.73728218416519,
+          2.547727666763617
+        ],
+        "physics_state": [
+          0.1,
+          -110.47969329204459,
+          48.73728218416519,
+          -4.452272333236383,
+          -13.635910560594604,
+          0.6070957888691763,
+          0.0,
+          94.9,
+          true
+        ],
+        "nominal_firing_tick": false
+      }
+    ],
+    "trace_sha256": "00238e4b82d1f492cc40f84f0899c4fac4257f35d6f494917dde2b50c449b205"
+  },
+  "laser_bridge": {
+    "config": {
+      "match": {
+        "tick_hz": 20,
+        "decide_every": 2,
+        "duration_s": 240,
+        "mechs": 16,
+        "spawn_min_separation": 130,
+        "spawn_zone_fraction": 0.8,
+        "arena_margin": 30
+      },
+      "bot": {
+        "tick_budget_ms": 50,
+        "hello_budget_ms": 20000,
+        "coast_s": 1,
+        "offer_timeout_s": 5,
+        "max_line_bytes": 65536
+      },
+      "mech": {
+        "radius": 2.5,
+        "height": 9,
+        "eye_height": 8,
+        "muzzle_height": 7,
+        "hp": 1400,
+        "walk_speed": 11.7,
+        "boost_speed": 19.5,
+        "ground_accel": 58.5,
+        "air_accel": 12,
+        "gravity": 22,
+        "jump_speed": 11,
+        "jet_accel": 34,
+        "max_rise_speed": 10,
+        "step_up": 1.2,
+        "max_slope_deg": 50,
+        "energy": 100,
+        "energy_regen": 18,
+        "energy_regen_delay": 0.6,
+        "boost_drain": 17,
+        "jet_drain": 15,
+        "turn_rate": 4,
+        "pitch_rate": 3,
+        "min_pitch": -0.7,
+        "max_pitch": 1.3,
+        "regen_delay": 5,
+        "regen_per_s": 45,
+        "charge_move_mult": 0.5,
+        "self_damage_mult": 0.5,
+        "armor": 0,
+        "rear_mult": 1.5,
+        "front_arc_deg": 180,
+        "near_range_bonus": 0,
+        "vision_bonus": 0,
+        "hearing": 1
+      },
+      "vision": {
+        "range": 200,
+        "fov_deg": 120,
+        "near_range": 45,
+        "canopy_blocks": true,
+        "show_enemy_hp": true,
+        "memory_s": 5
+      },
+      "sound": {
+        "bearing_noise_deg": 7,
+        "near": 60,
+        "mid": 160,
+        "step_speed": 5,
+        "step_every": 0.6,
+        "range": {
+          "step": 40,
+          "boost": 90,
+          "reload": 60,
+          "gun": 320,
+          "mortar": 420,
+          "explosion": 420,
+          "laser_charge": 140,
+          "laser": 380,
+          "lightning": 160,
+          "jet": 90,
+          "death": 600,
+          "crate": 220,
+          "npc_gun": 200,
+          "drop": 600
+        }
+      },
+      "weapons": {
+        "gun": {
+          "damage": 45,
+          "cooldown": 0.24,
+          "speed": 252,
+          "range": 230,
+          "spread_deg": 0.6,
+          "mag": 12,
+          "reload": 2.4
+        },
+        "mortar": {
+          "damage": 200,
+          "splash": 160,
+          "splash_radius": 7,
+          "splash_edge": 0.3,
+          "cooldown": 2.6,
+          "speed": 72,
+          "gravity": 22,
+          "ttl": 7,
+          "knock": 16,
+          "knock_up": 9,
+          "drain": 45
+        },
+        "laser": {
+          "damage": 315,
+          "charge": 0.75,
+          "min_charge": 0.15,
+          "min_frac": 0.35,
+          "hold_s": 2,
+          "cooldown": 1.65,
+          "range": 280,
+          "pierce": 0,
+          "charge_turn_mult": 1,
+          "cookoff": 0.6
+        },
+        "lightning": {
+          "damage": 60,
+          "cooldown": 0.25,
+          "range": 45,
+          "cone_deg": 30,
+          "chain": 2,
+          "chain_range": 14,
+          "chain_falloff": 0.7,
+          "energy": 3,
+          "short_s": 2
+        }
+      },
+      "projectile": {
+        "gun_radius": 0.3,
+        "npc_radius": 0.3
+      },
+      "cubes": {
+        "pickup_radius": 3.5,
+        "hp_per_cube": 0.04,
+        "damage_per_cube": 0.04,
+        "stat_cap": 10,
+        "death_drop_extra": 2,
+        "size_per_cube": 0.05,
+        "upgrade_thresholds": [
+          1,
+          3,
+          6,
+          10,
+          15,
+          21,
+          28,
+          36,
+          45
+        ]
+      },
+      "crates": {
+        "count": 36,
+        "roof_fraction": 0.25,
+        "hp": 300,
+        "radius": 1.4,
+        "height": 2.4,
+        "cubes": 1
+      },
+      "loot": {
+        "pickup_radius": 4,
+        "equip_s": 1,
+        "floor_count": 40,
+        "floor_roof_fraction": 0.25,
+        "crate_weapon_chance": 0.5,
+        "death_drop": 1,
+        "weights": {
+          "gun": 0,
+          "mortar": 1,
+          "laser": 1,
+          "lightning": 1
+        }
+      },
+      "npc": {
+        "count": 12,
+        "hp": 350,
+        "radius": 1.8,
+        "height": 3.5,
+        "speed": 5,
+        "leash": 30,
+        "chase_leash": 60,
+        "aggro_range": 45,
+        "deaggro_range": 90,
+        "spawn_clear": 90,
+        "damage": 25,
+        "cooldown": 1,
+        "projectile_speed": 90,
+        "spread_deg": 2.5,
+        "cubes": 2
+      },
+      "drops": {
+        "times": [
+          35,
+          70,
+          105
+        ],
+        "fall_s": 12.5,
+        "radius": 8,
+        "capture_s": 4,
+        "cubes": 3,
+        "repair": 1,
+        "spread": 0.7
+      },
+      "zone": {
+        "start_center": [
+          41.3,
+          -72.8
+        ],
+        "start_radius": 560,
+        "phases": [
+          {
+            "hold_s": 30,
+            "shrink_s": 25,
+            "radius": 380,
+            "dps": 20
+          },
+          {
+            "hold_s": 22.5,
+            "shrink_s": 20,
+            "radius": 240,
+            "dps": 35
+          },
+          {
+            "hold_s": 17.5,
+            "shrink_s": 17.5,
+            "radius": 140,
+            "dps": 60
+          },
+          {
+            "hold_s": 15,
+            "shrink_s": 15,
+            "radius": 70,
+            "dps": 100
+          },
+          {
+            "hold_s": 12.5,
+            "shrink_s": 12.5,
+            "radius": 25,
+            "dps": 160
+          },
+          {
+            "hold_s": 7.5,
+            "shrink_s": 12.5,
+            "radius": 0,
+            "dps": 260
+          }
+        ]
+      },
+      "debug": {
+        "max_lines": 64,
+        "max_points": 64,
+        "max_text": 16,
+        "max_text_chars": 80,
+        "max_bytes": 8192,
+        "max_match_bytes": 8000000,
+        "hold_s": 0.5
+      },
+      "replay": {
+        "frame_every": 2
+      },
+      "upgrades": [
+        {
+          "id": "plating",
+          "name": "Composite plating",
+          "desc": "+15% max HP",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.hp",
+              "mul": 1.15
+            }
+          ]
+        },
+        {
+          "id": "armor",
+          "name": "Reactive armor",
+          "desc": "-8% damage taken",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.armor",
+              "add": 0.08
+            }
+          ]
+        },
+        {
+          "id": "servos",
+          "name": "Leg servos",
+          "desc": "+8% walk and boost speed",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.walk_speed",
+              "mul": 1.08
+            },
+            {
+              "path": "mech.boost_speed",
+              "mul": 1.08
+            }
+          ]
+        },
+        {
+          "id": "capacitor",
+          "name": "Capacitor bank",
+          "desc": "+30 max energy",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.energy",
+              "add": 30
+            }
+          ]
+        },
+        {
+          "id": "reactor",
+          "name": "Reactor tune",
+          "desc": "+30% energy regen",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.energy_regen",
+              "mul": 1.3
+            }
+          ]
+        },
+        {
+          "id": "jets",
+          "name": "Efficient jets",
+          "desc": "-25% boost and jet energy drain",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.boost_drain",
+              "mul": 0.75
+            },
+            {
+              "path": "mech.jet_drain",
+              "mul": 0.75
+            }
+          ]
+        },
+        {
+          "id": "nanites",
+          "name": "Repair nanites",
+          "desc": "+60% out-of-combat regen, starts 1.5 s sooner",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.regen_per_s",
+              "mul": 1.6
+            },
+            {
+              "path": "mech.regen_delay",
+              "add": -1.5
+            }
+          ]
+        },
+        {
+          "id": "gyros",
+          "name": "Torso gyros",
+          "desc": "+30% aim turn rate",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.turn_rate",
+              "mul": 1.3
+            },
+            {
+              "path": "mech.pitch_rate",
+              "mul": 1.3
+            }
+          ]
+        },
+        {
+          "id": "sensors",
+          "name": "Sensor suite",
+          "desc": "+15 m proximity sensors, +25 m vision, halves sound bearing error",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.near_range_bonus",
+              "add": 15
+            },
+            {
+              "path": "mech.vision_bonus",
+              "add": 25
+            },
+            {
+              "path": "mech.hearing",
+              "mul": 0.5
+            }
+          ]
+        },
+        {
+          "id": "gun_damage",
+          "name": "Tungsten rounds",
+          "desc": "+15% arm gun damage",
+          "requires": "gun",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.gun.damage",
+              "mul": 1.15
+            }
+          ]
+        },
+        {
+          "id": "gun_rate",
+          "name": "Rotary feed",
+          "desc": "+15% arm gun fire rate",
+          "requires": "gun",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.gun.cooldown",
+              "mul": 0.87
+            }
+          ]
+        },
+        {
+          "id": "gun_velocity",
+          "name": "Rail barrel",
+          "desc": "+25% arm gun projectile speed",
+          "requires": "gun",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.gun.speed",
+              "mul": 1.25
+            },
+            {
+              "path": "weapons.gun.range",
+              "mul": 1.15
+            }
+          ]
+        },
+        {
+          "id": "gun_mag",
+          "name": "Drum magazine",
+          "desc": "+8 rounds, -20% reload time",
+          "requires": "gun",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.gun.mag",
+              "add": 8
+            },
+            {
+              "path": "weapons.gun.reload",
+              "mul": 0.8
+            }
+          ]
+        },
+        {
+          "id": "mortar_splash",
+          "name": "Cluster shells",
+          "desc": "+30% mortar splash radius",
+          "requires": "mortar",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.mortar.splash_radius",
+              "mul": 1.3
+            }
+          ]
+        },
+        {
+          "id": "mortar_reload",
+          "name": "Autoloader",
+          "desc": "-18% mortar cooldown",
+          "requires": "mortar",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.mortar.cooldown",
+              "mul": 0.82
+            }
+          ]
+        },
+        {
+          "id": "mortar_velocity",
+          "name": "Long tube",
+          "desc": "+20% shell speed",
+          "requires": "mortar",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.mortar.speed",
+              "mul": 1.2
+            }
+          ]
+        },
+        {
+          "id": "laser_charge",
+          "name": "Fast capacitors",
+          "desc": "-25% laser charge time",
+          "requires": "laser",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.laser.charge",
+              "mul": 0.75
+            }
+          ]
+        },
+        {
+          "id": "laser_damage",
+          "name": "Focusing lens",
+          "desc": "+18% laser damage",
+          "requires": "laser",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.laser.damage",
+              "mul": 1.18
+            }
+          ]
+        },
+        {
+          "id": "laser_pierce",
+          "name": "Phased beam",
+          "desc": "Laser passes through one more target",
+          "requires": "laser",
+          "max": 1,
+          "effects": [
+            {
+              "path": "weapons.laser.pierce",
+              "add": 1
+            }
+          ]
+        },
+        {
+          "id": "lightning_chain",
+          "name": "Arc relay",
+          "desc": "+1 lightning chain jump",
+          "requires": "lightning",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.lightning.chain",
+              "add": 1
+            }
+          ]
+        },
+        {
+          "id": "lightning_range",
+          "name": "Tesla coil",
+          "desc": "+20% lightning range and cone",
+          "requires": "lightning",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.lightning.range",
+              "mul": 1.2
+            },
+            {
+              "path": "weapons.lightning.cone_deg",
+              "mul": 1.2
+            }
+          ]
+        },
+        {
+          "id": "lightning_efficiency",
+          "name": "Superconductor",
+          "desc": "-35% lightning energy cost, +10% damage",
+          "requires": "lightning",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.lightning.energy",
+              "mul": 0.65
+            },
+            {
+              "path": "weapons.lightning.damage",
+              "mul": 1.1
+            }
+          ]
+        }
+      ]
+    },
+    "obs": {
+      "type": "obs",
+      "tick": 1612,
+      "t": 80.6,
+      "alive": 8,
+      "self": {
+        "id": 0,
+        "pos": [
+          -124.84,
+          -0.49,
+          -5.25
+        ],
+        "vel": [
+          -3.1,
+          9.25,
+          0
+        ],
+        "aim": [
+          -1.253,
+          0.14
+        ],
+        "hp": 1325.75,
+        "max_hp": 1400,
+        "energy": 79.6,
+        "max_energy": 100,
+        "grounded": true,
+        "cubes": 0,
+        "upgrades": [],
+        "weapons": [
+          {
+            "kind": "gun",
+            "cooldown": 0.07,
+            "stats": {
+              "damage": 45,
+              "cooldown": 0.24,
+              "speed": 252,
+              "range": 230,
+              "spread_deg": 0.6,
+              "mag": 12,
+              "reload": 2.4
+            },
+            "ammo": 9,
+            "reload": 0
+          },
+          {
+            "kind": "laser",
+            "cooldown": 0,
+            "stats": {
+              "damage": 315,
+              "charge": 0.75,
+              "min_charge": 0.15,
+              "min_frac": 0.35,
+              "hold_s": 2,
+              "cooldown": 1.65,
+              "range": 280,
+              "pierce": 0,
+              "charge_turn_mult": 1,
+              "cookoff": 0.6
+            },
+            "charge": 0.75
+          }
+        ],
+        "in_zone": true,
+        "stats": {
+          "radius": 2.5,
+          "height": 9,
+          "eye_height": 8,
+          "muzzle_height": 7,
+          "hp": 1400,
+          "walk_speed": 11.7,
+          "boost_speed": 19.5,
+          "ground_accel": 58.5,
+          "air_accel": 12,
+          "gravity": 22,
+          "jump_speed": 11,
+          "jet_accel": 34,
+          "max_rise_speed": 10,
+          "step_up": 1.2,
+          "max_slope_deg": 50,
+          "energy": 100,
+          "energy_regen": 18,
+          "energy_regen_delay": 0.6,
+          "boost_drain": 17,
+          "jet_drain": 15,
+          "turn_rate": 4,
+          "pitch_rate": 3,
+          "min_pitch": -0.7,
+          "max_pitch": 1.3,
+          "regen_delay": 5,
+          "regen_per_s": 45,
+          "charge_move_mult": 0.5,
+          "self_damage_mult": 0.5,
+          "armor": 0,
+          "rear_mult": 1.5,
+          "front_arc_deg": 180,
+          "near_range_bonus": 0,
+          "vision_bonus": 0,
+          "hearing": 1
+        }
+      },
+      "mechs": [
+        {
+          "id": 4,
+          "kind": "mech",
+          "pos": [
+            23.36,
+            -41.62,
+            1.62
+          ],
+          "vel": [
+            -8.83,
+            9.04,
+            0
+          ],
+          "aim": [
+            -2.389,
+            0.013
+          ],
+          "hp": 1190.61,
+          "max_hp": 1512,
+          "cubes": 2,
+          "weapons": [
+            "gun",
+            "mortar"
+          ],
+          "charging": false
+        },
+        {
+          "id": 9,
+          "kind": "mech",
+          "pos": [
+            -103.01,
+            -72.87,
+            10.97
+          ],
+          "vel": [
+            -7.1,
+            6.36,
+            8.9
+          ],
+          "aim": [
+            -0.481,
+            -0.159
+          ],
+          "hp": 482.09,
+          "max_hp": 1400,
+          "cubes": 0,
+          "weapons": [
+            "gun",
+            "lightning"
+          ],
+          "charging": false
+        }
+      ],
+      "projectiles": [],
+      "crates": [],
+      "cubes": [],
+      "pickups": [],
+      "sounds": [],
+      "beams": [],
+      "events": [],
+      "zone": {
+        "center": [
+          -111.38,
+          -20.12
+        ],
+        "radius": 358.3,
+        "next_center": [
+          -65.29,
+          15.04
+        ],
+        "next_radius": 240,
+        "shrink_start": 77.5,
+        "shrink_end": 97.5,
+        "dps": 35
+      },
+      "offer": null,
+      "drops": [
+        {
+          "id": 20000,
+          "pos": [
+            -138.04,
+            186.77,
+            -5.23
+          ],
+          "radius": 8,
+          "lands_in": 0,
+          "capture_s": 4,
+          "progress": 0,
+          "holder": null
+        },
+        {
+          "id": 20001,
+          "pos": [
+            -110.7,
+            95.57,
+            -4.55
+          ],
+          "radius": 8,
+          "lands_in": 1.9,
+          "capture_s": 4,
+          "progress": 0,
+          "holder": null
+        }
+      ]
+    },
+    "target": {
+      "id": 9,
+      "kind": "mech",
+      "pos": [
+        -103.01,
+        -72.87,
+        10.97
+      ],
+      "vel": [
+        -7.1,
+        6.36,
+        8.9
+      ],
+      "aim": [
+        -0.481,
+        -0.159
+      ],
+      "hp": 482.09,
+      "max_hp": 1400,
+      "cubes": 0,
+      "weapons": [
+        "gun",
+        "lightning"
+      ],
+      "charging": false
+    },
+    "baseline_action": {
+      "aim": [
+        -1.2811687247816748,
+        0.2308681328593067
+      ],
+      "fire": [
+        true,
+        false
+      ],
+      "reload": false
+    },
+    "poses": [
+      {
+        "model": "current_recorded_pose",
+        "seconds": 0.0,
+        "muzzle": [
+          -124.84,
+          -0.49,
+          1.75
+        ]
+      },
+      {
+        "model": "observed_charge_retained",
+        "seconds": 0.05,
+        "muzzle": [
+          -124.85001550240861,
+          -0.008302136624873946,
+          1.741570414424257
+        ],
+        "physics_state": [
+          0.05,
+          -124.85001550240861,
+          -0.008302136624873946,
+          -5.258429585575743,
+          -0.20031004817204678,
+          9.63395726750252,
+          0.0,
+          78.75,
+          true
+        ],
+        "nominal_firing_tick": true
+      },
+      {
+        "model": "observed_charge_retained",
+        "seconds": 0.1,
+        "muzzle": [
+          -124.82220725867772,
+          0.47840409056007094,
+          1.7417779274132226
+        ],
+        "physics_state": [
+          0.1,
+          -124.82220725867772,
+          0.47840409056007094,
+          -5.258222072586777,
+          0.5561648746178974,
+          9.734124543698897,
+          0.0,
+          77.9,
+          true
+        ],
+        "nominal_firing_tick": false
+      },
+      {
+        "model": "release_effective_before_motion",
+        "seconds": 0.05,
+        "muzzle": [
+          -124.9392608634918,
+          0.1077117271589959,
+          1.7406073913650824
+        ],
+        "physics_state": [
+          0.05,
+          -124.9392608634918,
+          0.1077117271589959,
+          -5.259392608634918,
+          -1.985217269835733,
+          11.954234543179918,
+          0.0,
+          78.75,
+          true
+        ],
+        "nominal_firing_tick": true
+      },
+      {
+        "model": "release_effective_before_motion",
+        "seconds": 0.1,
+        "muzzle": [
+          -124.98278259047537,
+          0.8406351814769878,
+          1.740172174095246
+        ],
+        "physics_state": [
+          0.1,
+          -124.98278259047537,
+          0.8406351814769878,
+          -5.259827825904754,
+          -0.8704345396714661,
+          14.658469086359837,
+          0.0,
+          77.9,
+          true
+        ],
+        "nominal_firing_tick": false
+      }
+    ],
+    "trace_sha256": "1f5350ada9a16550f9c1a0d1c8b28b4755ac3055d093f8a1bbcb5fb06618987a"
+  },
+  "gun_slew": {
+    "config": {
+      "match": {
+        "tick_hz": 20,
+        "decide_every": 2,
+        "duration_s": 240,
+        "mechs": 16,
+        "spawn_min_separation": 130,
+        "spawn_zone_fraction": 0.8,
+        "arena_margin": 30
+      },
+      "bot": {
+        "tick_budget_ms": 50,
+        "hello_budget_ms": 20000,
+        "coast_s": 1,
+        "offer_timeout_s": 5,
+        "max_line_bytes": 65536
+      },
+      "mech": {
+        "radius": 2.5,
+        "height": 9,
+        "eye_height": 8,
+        "muzzle_height": 7,
+        "hp": 1400,
+        "walk_speed": 11.7,
+        "boost_speed": 19.5,
+        "ground_accel": 58.5,
+        "air_accel": 12,
+        "gravity": 22,
+        "jump_speed": 11,
+        "jet_accel": 34,
+        "max_rise_speed": 10,
+        "step_up": 1.2,
+        "max_slope_deg": 50,
+        "energy": 100,
+        "energy_regen": 18,
+        "energy_regen_delay": 0.6,
+        "boost_drain": 17,
+        "jet_drain": 15,
+        "turn_rate": 4,
+        "pitch_rate": 3,
+        "min_pitch": -0.7,
+        "max_pitch": 1.3,
+        "regen_delay": 5,
+        "regen_per_s": 45,
+        "charge_move_mult": 0.5,
+        "self_damage_mult": 0.5,
+        "armor": 0,
+        "rear_mult": 1.5,
+        "front_arc_deg": 180,
+        "near_range_bonus": 0,
+        "vision_bonus": 0,
+        "hearing": 1
+      },
+      "vision": {
+        "range": 200,
+        "fov_deg": 120,
+        "near_range": 45,
+        "canopy_blocks": true,
+        "show_enemy_hp": true,
+        "memory_s": 5
+      },
+      "sound": {
+        "bearing_noise_deg": 7,
+        "near": 60,
+        "mid": 160,
+        "step_speed": 5,
+        "step_every": 0.6,
+        "range": {
+          "step": 40,
+          "boost": 90,
+          "reload": 60,
+          "gun": 320,
+          "mortar": 420,
+          "explosion": 420,
+          "laser_charge": 140,
+          "laser": 380,
+          "lightning": 160,
+          "jet": 90,
+          "death": 600,
+          "crate": 220,
+          "npc_gun": 200,
+          "drop": 600
+        }
+      },
+      "weapons": {
+        "gun": {
+          "damage": 45,
+          "cooldown": 0.24,
+          "speed": 252,
+          "range": 230,
+          "spread_deg": 0.6,
+          "mag": 12,
+          "reload": 2.4
+        },
+        "mortar": {
+          "damage": 200,
+          "splash": 160,
+          "splash_radius": 7,
+          "splash_edge": 0.3,
+          "cooldown": 2.6,
+          "speed": 72,
+          "gravity": 22,
+          "ttl": 7,
+          "knock": 16,
+          "knock_up": 9,
+          "drain": 45
+        },
+        "laser": {
+          "damage": 315,
+          "charge": 0.75,
+          "min_charge": 0.15,
+          "min_frac": 0.35,
+          "hold_s": 2,
+          "cooldown": 1.65,
+          "range": 280,
+          "pierce": 0,
+          "charge_turn_mult": 1,
+          "cookoff": 0.6
+        },
+        "lightning": {
+          "damage": 60,
+          "cooldown": 0.25,
+          "range": 45,
+          "cone_deg": 30,
+          "chain": 2,
+          "chain_range": 14,
+          "chain_falloff": 0.7,
+          "energy": 3,
+          "short_s": 2
+        }
+      },
+      "projectile": {
+        "gun_radius": 0.3,
+        "npc_radius": 0.3
+      },
+      "cubes": {
+        "pickup_radius": 3.5,
+        "hp_per_cube": 0.04,
+        "damage_per_cube": 0.04,
+        "stat_cap": 10,
+        "death_drop_extra": 2,
+        "size_per_cube": 0.05,
+        "upgrade_thresholds": [
+          1,
+          3,
+          6,
+          10,
+          15,
+          21,
+          28,
+          36,
+          45
+        ]
+      },
+      "crates": {
+        "count": 36,
+        "roof_fraction": 0.25,
+        "hp": 300,
+        "radius": 1.4,
+        "height": 2.4,
+        "cubes": 1
+      },
+      "loot": {
+        "pickup_radius": 4,
+        "equip_s": 1,
+        "floor_count": 40,
+        "floor_roof_fraction": 0.25,
+        "crate_weapon_chance": 0.5,
+        "death_drop": 1,
+        "weights": {
+          "gun": 0,
+          "mortar": 1,
+          "laser": 1,
+          "lightning": 1
+        }
+      },
+      "npc": {
+        "count": 12,
+        "hp": 350,
+        "radius": 1.8,
+        "height": 3.5,
+        "speed": 5,
+        "leash": 30,
+        "chase_leash": 60,
+        "aggro_range": 45,
+        "deaggro_range": 90,
+        "spawn_clear": 90,
+        "damage": 25,
+        "cooldown": 1,
+        "projectile_speed": 90,
+        "spread_deg": 2.5,
+        "cubes": 2
+      },
+      "drops": {
+        "times": [
+          35,
+          70,
+          105
+        ],
+        "fall_s": 12.5,
+        "radius": 8,
+        "capture_s": 4,
+        "cubes": 3,
+        "repair": 1,
+        "spread": 0.7
+      },
+      "zone": {
+        "start_center": [
+          41.3,
+          -72.8
+        ],
+        "start_radius": 560,
+        "phases": [
+          {
+            "hold_s": 30,
+            "shrink_s": 25,
+            "radius": 380,
+            "dps": 20
+          },
+          {
+            "hold_s": 22.5,
+            "shrink_s": 20,
+            "radius": 240,
+            "dps": 35
+          },
+          {
+            "hold_s": 17.5,
+            "shrink_s": 17.5,
+            "radius": 140,
+            "dps": 60
+          },
+          {
+            "hold_s": 15,
+            "shrink_s": 15,
+            "radius": 70,
+            "dps": 100
+          },
+          {
+            "hold_s": 12.5,
+            "shrink_s": 12.5,
+            "radius": 25,
+            "dps": 160
+          },
+          {
+            "hold_s": 7.5,
+            "shrink_s": 12.5,
+            "radius": 0,
+            "dps": 260
+          }
+        ]
+      },
+      "debug": {
+        "max_lines": 64,
+        "max_points": 64,
+        "max_text": 16,
+        "max_text_chars": 80,
+        "max_bytes": 8192,
+        "max_match_bytes": 8000000,
+        "hold_s": 0.5
+      },
+      "replay": {
+        "frame_every": 2
+      },
+      "upgrades": [
+        {
+          "id": "plating",
+          "name": "Composite plating",
+          "desc": "+15% max HP",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.hp",
+              "mul": 1.15
+            }
+          ]
+        },
+        {
+          "id": "armor",
+          "name": "Reactive armor",
+          "desc": "-8% damage taken",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.armor",
+              "add": 0.08
+            }
+          ]
+        },
+        {
+          "id": "servos",
+          "name": "Leg servos",
+          "desc": "+8% walk and boost speed",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.walk_speed",
+              "mul": 1.08
+            },
+            {
+              "path": "mech.boost_speed",
+              "mul": 1.08
+            }
+          ]
+        },
+        {
+          "id": "capacitor",
+          "name": "Capacitor bank",
+          "desc": "+30 max energy",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.energy",
+              "add": 30
+            }
+          ]
+        },
+        {
+          "id": "reactor",
+          "name": "Reactor tune",
+          "desc": "+30% energy regen",
+          "max": 3,
+          "effects": [
+            {
+              "path": "mech.energy_regen",
+              "mul": 1.3
+            }
+          ]
+        },
+        {
+          "id": "jets",
+          "name": "Efficient jets",
+          "desc": "-25% boost and jet energy drain",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.boost_drain",
+              "mul": 0.75
+            },
+            {
+              "path": "mech.jet_drain",
+              "mul": 0.75
+            }
+          ]
+        },
+        {
+          "id": "nanites",
+          "name": "Repair nanites",
+          "desc": "+60% out-of-combat regen, starts 1.5 s sooner",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.regen_per_s",
+              "mul": 1.6
+            },
+            {
+              "path": "mech.regen_delay",
+              "add": -1.5
+            }
+          ]
+        },
+        {
+          "id": "gyros",
+          "name": "Torso gyros",
+          "desc": "+30% aim turn rate",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.turn_rate",
+              "mul": 1.3
+            },
+            {
+              "path": "mech.pitch_rate",
+              "mul": 1.3
+            }
+          ]
+        },
+        {
+          "id": "sensors",
+          "name": "Sensor suite",
+          "desc": "+15 m proximity sensors, +25 m vision, halves sound bearing error",
+          "max": 2,
+          "effects": [
+            {
+              "path": "mech.near_range_bonus",
+              "add": 15
+            },
+            {
+              "path": "mech.vision_bonus",
+              "add": 25
+            },
+            {
+              "path": "mech.hearing",
+              "mul": 0.5
+            }
+          ]
+        },
+        {
+          "id": "gun_damage",
+          "name": "Tungsten rounds",
+          "desc": "+15% arm gun damage",
+          "requires": "gun",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.gun.damage",
+              "mul": 1.15
+            }
+          ]
+        },
+        {
+          "id": "gun_rate",
+          "name": "Rotary feed",
+          "desc": "+15% arm gun fire rate",
+          "requires": "gun",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.gun.cooldown",
+              "mul": 0.87
+            }
+          ]
+        },
+        {
+          "id": "gun_velocity",
+          "name": "Rail barrel",
+          "desc": "+25% arm gun projectile speed",
+          "requires": "gun",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.gun.speed",
+              "mul": 1.25
+            },
+            {
+              "path": "weapons.gun.range",
+              "mul": 1.15
+            }
+          ]
+        },
+        {
+          "id": "gun_mag",
+          "name": "Drum magazine",
+          "desc": "+8 rounds, -20% reload time",
+          "requires": "gun",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.gun.mag",
+              "add": 8
+            },
+            {
+              "path": "weapons.gun.reload",
+              "mul": 0.8
+            }
+          ]
+        },
+        {
+          "id": "mortar_splash",
+          "name": "Cluster shells",
+          "desc": "+30% mortar splash radius",
+          "requires": "mortar",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.mortar.splash_radius",
+              "mul": 1.3
+            }
+          ]
+        },
+        {
+          "id": "mortar_reload",
+          "name": "Autoloader",
+          "desc": "-18% mortar cooldown",
+          "requires": "mortar",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.mortar.cooldown",
+              "mul": 0.82
+            }
+          ]
+        },
+        {
+          "id": "mortar_velocity",
+          "name": "Long tube",
+          "desc": "+20% shell speed",
+          "requires": "mortar",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.mortar.speed",
+              "mul": 1.2
+            }
+          ]
+        },
+        {
+          "id": "laser_charge",
+          "name": "Fast capacitors",
+          "desc": "-25% laser charge time",
+          "requires": "laser",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.laser.charge",
+              "mul": 0.75
+            }
+          ]
+        },
+        {
+          "id": "laser_damage",
+          "name": "Focusing lens",
+          "desc": "+18% laser damage",
+          "requires": "laser",
+          "max": 3,
+          "effects": [
+            {
+              "path": "weapons.laser.damage",
+              "mul": 1.18
+            }
+          ]
+        },
+        {
+          "id": "laser_pierce",
+          "name": "Phased beam",
+          "desc": "Laser passes through one more target",
+          "requires": "laser",
+          "max": 1,
+          "effects": [
+            {
+              "path": "weapons.laser.pierce",
+              "add": 1
+            }
+          ]
+        },
+        {
+          "id": "lightning_chain",
+          "name": "Arc relay",
+          "desc": "+1 lightning chain jump",
+          "requires": "lightning",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.lightning.chain",
+              "add": 1
+            }
+          ]
+        },
+        {
+          "id": "lightning_range",
+          "name": "Tesla coil",
+          "desc": "+20% lightning range and cone",
+          "requires": "lightning",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.lightning.range",
+              "mul": 1.2
+            },
+            {
+              "path": "weapons.lightning.cone_deg",
+              "mul": 1.2
+            }
+          ]
+        },
+        {
+          "id": "lightning_efficiency",
+          "name": "Superconductor",
+          "desc": "-35% lightning energy cost, +10% damage",
+          "requires": "lightning",
+          "max": 2,
+          "effects": [
+            {
+              "path": "weapons.lightning.energy",
+              "mul": 0.65
+            },
+            {
+              "path": "weapons.lightning.damage",
+              "mul": 1.1
+            }
+          ]
+        }
+      ]
+    },
+    "obs": {
+      "type": "obs",
+      "tick": 2548,
+      "t": 127.4,
+      "alive": 5,
+      "self": {
+        "id": 0,
+        "pos": [
+          -27.23,
+          -58.53,
+          0.02
+        ],
+        "vel": [
+          -0.15,
+          -0.91,
+          0
+        ],
+        "aim": [
+          1.474,
+          0
+        ],
+        "hp": 1568,
+        "max_hp": 1568,
+        "energy": 100,
+        "max_energy": 100,
+        "grounded": true,
+        "cubes": 3,
+        "upgrades": [
+          "nanites",
+          "armor"
+        ],
+        "weapons": [
+          {
+            "kind": "gun",
+            "cooldown": 0,
+            "stats": {
+              "damage": 45,
+              "cooldown": 0.24,
+              "speed": 252,
+              "range": 230,
+              "spread_deg": 0.6,
+              "mag": 12,
+              "reload": 2.4
+            },
+            "ammo": 12,
+            "reload": 0
+          },
+          {
+            "kind": "lightning",
+            "cooldown": 0,
+            "stats": {
+              "damage": 60,
+              "cooldown": 0.25,
+              "range": 45,
+              "cone_deg": 30,
+              "chain": 2,
+              "chain_range": 14,
+              "chain_falloff": 0.7,
+              "energy": 3,
+              "short_s": 2
+            }
+          }
+        ],
+        "in_zone": true,
+        "stats": {
+          "radius": 2.5,
+          "height": 9,
+          "eye_height": 9.2,
+          "muzzle_height": 8.05,
+          "hp": 1400,
+          "walk_speed": 11.7,
+          "boost_speed": 19.5,
+          "ground_accel": 58.5,
+          "air_accel": 12,
+          "gravity": 22,
+          "jump_speed": 11,
+          "jet_accel": 34,
+          "max_rise_speed": 10,
+          "step_up": 1.2,
+          "max_slope_deg": 50,
+          "energy": 100,
+          "energy_regen": 18,
+          "energy_regen_delay": 0.6,
+          "boost_drain": 17,
+          "jet_drain": 15,
+          "turn_rate": 4,
+          "pitch_rate": 3,
+          "min_pitch": -0.7,
+          "max_pitch": 1.3,
+          "regen_delay": 3.5,
+          "regen_per_s": 72,
+          "charge_move_mult": 0.5,
+          "self_damage_mult": 0.5,
+          "armor": 0.08,
+          "rear_mult": 1.5,
+          "front_arc_deg": 180,
+          "near_range_bonus": 0,
+          "vision_bonus": 0,
+          "hearing": 1
+        }
+      },
+      "mechs": [
+        {
+          "id": 7,
+          "kind": "mech",
+          "pos": [
+            -17.29,
+            88.73,
+            24.81
+          ],
+          "vel": [
+            -2.4,
+            2.54,
+            0
+          ],
+          "aim": [
+            -1.489,
+            -0.176
+          ],
+          "hp": 684.89,
+          "max_hp": 2254,
+          "cubes": 16,
+          "weapons": [
+            "gun",
+            "laser"
+          ],
+          "charging": false
+        }
+      ],
+      "projectiles": [],
+      "crates": [],
+      "cubes": [],
+      "pickups": [
+        {
+          "id": 8022,
+          "kind": "mortar",
+          "pos": [
+            -35.05,
+            -63.33,
+            -0.48
+          ]
+        }
+      ],
+      "sounds": [],
+      "beams": [],
+      "events": [],
+      "zone": {
+        "center": [
+          70.23,
+          -77.66
+        ],
+        "radius": 169.14,
+        "next_center": [
+          86.01,
+          -87.05
+        ],
+        "next_radius": 140,
+        "shrink_start": 115,
+        "shrink_end": 132.5,
+        "dps": 60
+      },
+      "offer": null,
+      "drops": [
+        {
+          "id": 20002,
+          "pos": [
+            44.02,
+            -150.45,
+            0.52
+          ],
+          "radius": 8,
+          "lands_in": 0,
+          "capture_s": 4,
+          "progress": 0,
+          "holder": null
+        }
+      ]
+    },
+    "target": {
+      "id": 7,
+      "kind": "mech",
+      "pos": [
+        -17.29,
+        88.73,
+        24.81
+      ],
+      "vel": [
+        -2.4,
+        2.54,
+        0
+      ],
+      "aim": [
+        -1.489,
+        -0.176
+      ],
+      "hp": 684.89,
+      "max_hp": 2254,
+      "cubes": 16,
+      "weapons": [
+        "gun",
+        "laser"
+      ],
+      "charging": false
+    },
+    "baseline_action": {
+      "tick": 2548,
+      "move": [
+        0.9727689916482181,
+        0.2317768083474034
+      ],
+      "boost": false,
+      "jump": false,
+      "aim": [
+        1.5143502626366563,
+        0.20599016687178015
+      ],
+      "fire": [
+        true,
+        false
+      ],
+      "reload": false
+    }
+  },
+  "legacy_actions": [
+    {
+      "obs": {
+        "tick": 100,
+        "t": 5.0,
+        "self": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            0,
+            -0.025
+          ],
+          "hp": 1400,
+          "energy": 100,
+          "cubes": 0,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 8,
+            "muzzle_height": 7,
+            "hp": 1400,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 5,
+            "regen_per_s": 45,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          },
+          "weapons": [
+            {
+              "kind": "lightning",
+              "stats": {
+                "damage": 60,
+                "cooldown": 0.25,
+                "range": 45,
+                "cone_deg": 30,
+                "chain": 2,
+                "chain_range": 14,
+                "chain_falloff": 0.7,
+                "energy": 3,
+                "short_s": 2
+              },
+              "cooldown": 0
+            },
+            null
+          ]
+        }
+      },
+      "target": {
+        "id": 5,
+        "kind": "mech",
+        "pos": [
+          30,
+          0,
+          0
+        ],
+        "vel": [
+          0,
+          3,
+          0
+        ],
+        "cubes": 0,
+        "hp": 1400
+      },
+      "allow_fire": false,
+      "emergency": false,
+      "action": {
+        "aim": [
+          0,
+          -0.025
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "tick": 100,
+        "t": 5.0,
+        "self": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            0,
+            -0.025
+          ],
+          "hp": 1400,
+          "energy": 100,
+          "cubes": 0,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 8,
+            "muzzle_height": 7,
+            "hp": 1400,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 5,
+            "regen_per_s": 45,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          },
+          "weapons": [
+            {
+              "kind": "lightning",
+              "stats": {
+                "damage": 60,
+                "cooldown": 0.25,
+                "range": 45,
+                "cone_deg": 30,
+                "chain": 2,
+                "chain_range": 14,
+                "chain_falloff": 0.7,
+                "energy": 3,
+                "short_s": 2
+              },
+              "cooldown": 0
+            },
+            null
+          ]
+        }
+      },
+      "target": {
+        "id": 5,
+        "kind": "mech",
+        "pos": [
+          30,
+          0,
+          0
+        ],
+        "vel": [
+          0,
+          3,
+          0
+        ],
+        "cubes": 0,
+        "hp": 1400
+      },
+      "allow_fire": true,
+      "emergency": false,
+      "action": {
+        "aim": [
+          0.004999958333958323,
+          -0.08314019742498958
+        ],
+        "fire": [
+          true,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "tick": 100,
+        "t": 5.0,
+        "self": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            0,
+            -0.025
+          ],
+          "hp": 1400,
+          "energy": 100,
+          "cubes": 0,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 8,
+            "muzzle_height": 7,
+            "hp": 1400,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 5,
+            "regen_per_s": 45,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          },
+          "weapons": [
+            {
+              "kind": "lightning",
+              "stats": {
+                "damage": 60,
+                "cooldown": 0.25,
+                "range": 45,
+                "cone_deg": 30,
+                "chain": 2,
+                "chain_range": 14,
+                "chain_falloff": 0.7,
+                "energy": 3,
+                "short_s": 2
+              },
+              "cooldown": 0
+            },
+            null
+          ]
+        }
+      },
+      "target": {
+        "id": 5,
+        "kind": "mech",
+        "pos": [
+          30,
+          0,
+          0
+        ],
+        "vel": [
+          0,
+          3,
+          0
+        ],
+        "cubes": 0,
+        "hp": 1400
+      },
+      "allow_fire": false,
+      "emergency": true,
+      "action": {
+        "aim": [
+          0,
+          -0.025
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "tick": 100,
+        "t": 5.0,
+        "self": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            0,
+            -0.025
+          ],
+          "hp": 1400,
+          "energy": 100,
+          "cubes": 0,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 8,
+            "muzzle_height": 7,
+            "hp": 1400,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 5,
+            "regen_per_s": 45,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          },
+          "weapons": [
+            {
+              "kind": "lightning",
+              "stats": {
+                "damage": 60,
+                "cooldown": 0.25,
+                "range": 45,
+                "cone_deg": 30,
+                "chain": 2,
+                "chain_range": 14,
+                "chain_falloff": 0.7,
+                "energy": 3,
+                "short_s": 2
+              },
+              "cooldown": 0
+            },
+            null
+          ]
+        }
+      },
+      "target": {
+        "id": 5,
+        "kind": "mech",
+        "pos": [
+          30,
+          0,
+          0
+        ],
+        "vel": [
+          0,
+          3,
+          0
+        ],
+        "cubes": 0,
+        "hp": 1400
+      },
+      "allow_fire": true,
+      "emergency": true,
+      "action": {
+        "aim": [
+          0.004999958333958323,
+          -0.08314019742498958
+        ],
+        "fire": [
+          true,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "tick": 100,
+        "t": 5.0,
+        "self": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            0,
+            -0.025
+          ],
+          "hp": 1400,
+          "energy": 100,
+          "cubes": 0,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 8,
+            "muzzle_height": 7,
+            "hp": 1400,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 5,
+            "regen_per_s": 45,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          },
+          "weapons": [
+            {
+              "kind": "mortar",
+              "stats": {
+                "damage": 200,
+                "splash": 160,
+                "splash_radius": 7,
+                "splash_edge": 0.3,
+                "cooldown": 2.6,
+                "speed": 72,
+                "gravity": 22,
+                "ttl": 7,
+                "knock": 16,
+                "knock_up": 9,
+                "drain": 45
+              },
+              "cooldown": 0
+            },
+            null
+          ]
+        }
+      },
+      "target": {
+        "id": 5,
+        "kind": "mech",
+        "pos": [
+          80,
+          0,
+          0
+        ],
+        "vel": [
+          0,
+          3,
+          0
+        ],
+        "cubes": 0,
+        "hp": 1400
+      },
+      "allow_fire": false,
+      "emergency": false,
+      "action": {
+        "aim": [
+          0,
+          -0.025
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "tick": 100,
+        "t": 5.0,
+        "self": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            0,
+            -0.025
+          ],
+          "hp": 1400,
+          "energy": 100,
+          "cubes": 0,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 8,
+            "muzzle_height": 7,
+            "hp": 1400,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 5,
+            "regen_per_s": 45,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          },
+          "weapons": [
+            {
+              "kind": "mortar",
+              "stats": {
+                "damage": 200,
+                "splash": 160,
+                "splash_radius": 7,
+                "splash_edge": 0.3,
+                "cooldown": 2.6,
+                "speed": 72,
+                "gravity": 22,
+                "ttl": 7,
+                "knock": 16,
+                "knock_up": 9,
+                "drain": 45
+              },
+              "cooldown": 0
+            },
+            null
+          ]
+        }
+      },
+      "target": {
+        "id": 5,
+        "kind": "mech",
+        "pos": [
+          80,
+          0,
+          0
+        ],
+        "vel": [
+          0,
+          3,
+          0
+        ],
+        "cubes": 0,
+        "hp": 1400
+      },
+      "allow_fire": true,
+      "emergency": false,
+      "action": {
+        "aim": [
+          0.04380298977380178,
+          0.1090791849837172
+        ],
+        "fire": [
+          true,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "tick": 100,
+        "t": 5.0,
+        "self": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            0,
+            -0.025
+          ],
+          "hp": 1400,
+          "energy": 100,
+          "cubes": 0,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 8,
+            "muzzle_height": 7,
+            "hp": 1400,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 5,
+            "regen_per_s": 45,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          },
+          "weapons": [
+            {
+              "kind": "mortar",
+              "stats": {
+                "damage": 200,
+                "splash": 160,
+                "splash_radius": 7,
+                "splash_edge": 0.3,
+                "cooldown": 2.6,
+                "speed": 72,
+                "gravity": 22,
+                "ttl": 7,
+                "knock": 16,
+                "knock_up": 9,
+                "drain": 45
+              },
+              "cooldown": 0
+            },
+            null
+          ]
+        }
+      },
+      "target": {
+        "id": 5,
+        "kind": "mech",
+        "pos": [
+          80,
+          0,
+          0
+        ],
+        "vel": [
+          0,
+          3,
+          0
+        ],
+        "cubes": 0,
+        "hp": 1400
+      },
+      "allow_fire": false,
+      "emergency": true,
+      "action": {
+        "aim": [
+          0,
+          -0.025
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "tick": 100,
+        "t": 5.0,
+        "self": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            0,
+            -0.025
+          ],
+          "hp": 1400,
+          "energy": 100,
+          "cubes": 0,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 8,
+            "muzzle_height": 7,
+            "hp": 1400,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 5,
+            "regen_per_s": 45,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          },
+          "weapons": [
+            {
+              "kind": "mortar",
+              "stats": {
+                "damage": 200,
+                "splash": 160,
+                "splash_radius": 7,
+                "splash_edge": 0.3,
+                "cooldown": 2.6,
+                "speed": 72,
+                "gravity": 22,
+                "ttl": 7,
+                "knock": 16,
+                "knock_up": 9,
+                "drain": 45
+              },
+              "cooldown": 0
+            },
+            null
+          ]
+        }
+      },
+      "target": {
+        "id": 5,
+        "kind": "mech",
+        "pos": [
+          80,
+          0,
+          0
+        ],
+        "vel": [
+          0,
+          3,
+          0
+        ],
+        "cubes": 0,
+        "hp": 1400
+      },
+      "allow_fire": true,
+      "emergency": true,
+      "action": {
+        "aim": [
+          0.0,
+          -0.031239833430268277
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "tick": 100,
+        "t": 5.0,
+        "self": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            0,
+            -0.025
+          ],
+          "hp": 1400,
+          "energy": 100,
+          "cubes": 0,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 8,
+            "muzzle_height": 7,
+            "hp": 1400,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 5,
+            "regen_per_s": 45,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          },
+          "weapons": [
+            {
+              "kind": "lightning",
+              "stats": {
+                "damage": 60,
+                "cooldown": 0.25,
+                "range": 45,
+                "cone_deg": 30,
+                "chain": 2,
+                "chain_range": 14,
+                "chain_falloff": 0.7,
+                "energy": 3,
+                "short_s": 2
+              },
+              "cooldown": 0
+            },
+            {
+              "kind": "mortar",
+              "stats": {
+                "damage": 200,
+                "splash": 160,
+                "splash_radius": 7,
+                "splash_edge": 0.3,
+                "cooldown": 2.6,
+                "speed": 72,
+                "gravity": 22,
+                "ttl": 7,
+                "knock": 16,
+                "knock_up": 9,
+                "drain": 45
+              },
+              "cooldown": 0
+            }
+          ]
+        }
+      },
+      "target": {
+        "id": 5,
+        "kind": "mech",
+        "pos": [
+          80,
+          0,
+          0
+        ],
+        "vel": [
+          0,
+          3,
+          0
+        ],
+        "cubes": 0,
+        "hp": 1400
+      },
+      "allow_fire": false,
+      "emergency": false,
+      "action": {
+        "aim": [
+          0,
+          -0.025
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "tick": 100,
+        "t": 5.0,
+        "self": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            0,
+            -0.025
+          ],
+          "hp": 1400,
+          "energy": 100,
+          "cubes": 0,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 8,
+            "muzzle_height": 7,
+            "hp": 1400,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 5,
+            "regen_per_s": 45,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          },
+          "weapons": [
+            {
+              "kind": "lightning",
+              "stats": {
+                "damage": 60,
+                "cooldown": 0.25,
+                "range": 45,
+                "cone_deg": 30,
+                "chain": 2,
+                "chain_range": 14,
+                "chain_falloff": 0.7,
+                "energy": 3,
+                "short_s": 2
+              },
+              "cooldown": 0
+            },
+            {
+              "kind": "mortar",
+              "stats": {
+                "damage": 200,
+                "splash": 160,
+                "splash_radius": 7,
+                "splash_edge": 0.3,
+                "cooldown": 2.6,
+                "speed": 72,
+                "gravity": 22,
+                "ttl": 7,
+                "knock": 16,
+                "knock_up": 9,
+                "drain": 45
+              },
+              "cooldown": 0
+            }
+          ]
+        }
+      },
+      "target": {
+        "id": 5,
+        "kind": "mech",
+        "pos": [
+          80,
+          0,
+          0
+        ],
+        "vel": [
+          0,
+          3,
+          0
+        ],
+        "cubes": 0,
+        "hp": 1400
+      },
+      "allow_fire": true,
+      "emergency": false,
+      "action": {
+        "aim": [
+          0.04380298977380178,
+          0.1090791849837172
+        ],
+        "fire": [
+          false,
+          true
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "tick": 100,
+        "t": 5.0,
+        "self": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            0,
+            -0.025
+          ],
+          "hp": 1400,
+          "energy": 100,
+          "cubes": 0,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 8,
+            "muzzle_height": 7,
+            "hp": 1400,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 5,
+            "regen_per_s": 45,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          },
+          "weapons": [
+            {
+              "kind": "lightning",
+              "stats": {
+                "damage": 60,
+                "cooldown": 0.25,
+                "range": 45,
+                "cone_deg": 30,
+                "chain": 2,
+                "chain_range": 14,
+                "chain_falloff": 0.7,
+                "energy": 3,
+                "short_s": 2
+              },
+              "cooldown": 0
+            },
+            {
+              "kind": "mortar",
+              "stats": {
+                "damage": 200,
+                "splash": 160,
+                "splash_radius": 7,
+                "splash_edge": 0.3,
+                "cooldown": 2.6,
+                "speed": 72,
+                "gravity": 22,
+                "ttl": 7,
+                "knock": 16,
+                "knock_up": 9,
+                "drain": 45
+              },
+              "cooldown": 0
+            }
+          ]
+        }
+      },
+      "target": {
+        "id": 5,
+        "kind": "mech",
+        "pos": [
+          80,
+          0,
+          0
+        ],
+        "vel": [
+          0,
+          3,
+          0
+        ],
+        "cubes": 0,
+        "hp": 1400
+      },
+      "allow_fire": false,
+      "emergency": true,
+      "action": {
+        "aim": [
+          0,
+          -0.025
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    },
+    {
+      "obs": {
+        "tick": 100,
+        "t": 5.0,
+        "self": {
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "vel": [
+            0,
+            0,
+            0
+          ],
+          "aim": [
+            0,
+            -0.025
+          ],
+          "hp": 1400,
+          "energy": 100,
+          "cubes": 0,
+          "stats": {
+            "radius": 2.5,
+            "height": 9,
+            "eye_height": 8,
+            "muzzle_height": 7,
+            "hp": 1400,
+            "walk_speed": 11.7,
+            "boost_speed": 19.5,
+            "ground_accel": 58.5,
+            "air_accel": 12,
+            "gravity": 22,
+            "jump_speed": 11,
+            "jet_accel": 34,
+            "max_rise_speed": 10,
+            "step_up": 1.2,
+            "max_slope_deg": 50,
+            "energy": 100,
+            "energy_regen": 18,
+            "energy_regen_delay": 0.6,
+            "boost_drain": 17,
+            "jet_drain": 15,
+            "turn_rate": 4,
+            "pitch_rate": 3,
+            "min_pitch": -0.7,
+            "max_pitch": 1.3,
+            "regen_delay": 5,
+            "regen_per_s": 45,
+            "charge_move_mult": 0.5,
+            "self_damage_mult": 0.5,
+            "armor": 0,
+            "rear_mult": 1.5,
+            "front_arc_deg": 180,
+            "near_range_bonus": 0,
+            "vision_bonus": 0,
+            "hearing": 1
+          },
+          "weapons": [
+            {
+              "kind": "lightning",
+              "stats": {
+                "damage": 60,
+                "cooldown": 0.25,
+                "range": 45,
+                "cone_deg": 30,
+                "chain": 2,
+                "chain_range": 14,
+                "chain_falloff": 0.7,
+                "energy": 3,
+                "short_s": 2
+              },
+              "cooldown": 0
+            },
+            {
+              "kind": "mortar",
+              "stats": {
+                "damage": 200,
+                "splash": 160,
+                "splash_radius": 7,
+                "splash_edge": 0.3,
+                "cooldown": 2.6,
+                "speed": 72,
+                "gravity": 22,
+                "ttl": 7,
+                "knock": 16,
+                "knock_up": 9,
+                "drain": 45
+              },
+              "cooldown": 0
+            }
+          ]
+        }
+      },
+      "target": {
+        "id": 5,
+        "kind": "mech",
+        "pos": [
+          80,
+          0,
+          0
+        ],
+        "vel": [
+          0,
+          3,
+          0
+        ],
+        "cubes": 0,
+        "hp": 1400
+      },
+      "allow_fire": true,
+      "emergency": true,
+      "action": {
+        "aim": [
+          0.0,
+          -0.031239833430268277
+        ],
+        "fire": [
+          false,
+          false
+        ],
+        "reload": false
+      }
+    }
+  ]
+}
