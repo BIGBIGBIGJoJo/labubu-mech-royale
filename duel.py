@@ -189,8 +189,9 @@ class DuelController:
                            health_recover=self.health_recover)
         return self.report
 
-    def decide(self, obs, threats, target, stats, *, urgent=False):
+    def decide(self, obs, threats, target, stats, *, urgent=False, acquire_weapon=None):
         now, me = obs['t'], obs['self']
+        had_encounter = self.encounter is not None
         self._events(obs)
         fraction = me['hp']/max(me['max_hp'], 1)
         if fraction < self.LOW_HP:
@@ -253,6 +254,16 @@ class DuelController:
                 return self._stop(now, 'retreat_commitment', ids)
         if schedule['first_hit_s'] is None:
             return self._stop(now, 'no_current_weapon_solution', ids)
+        # Visibility alone need not abandon a vetted weapon approach. Existing
+        # encounters (including one reset for retry above) keep their policy;
+        # an observed hit starts the fight ledger even during acquisition.
+        if (not had_encounter and self.encounter is None and fraction >= self.HEALED_HP
+                and not urgent and acquire_weapon is not None
+                and not any(e['type'] == 'hit' and e.get('target') == target['id']
+                            and e.get('amount', 0.) > 0 for e in obs.get('events', ()))
+                and acquire_weapon()):
+            self.report.update(phase='acquire', reason='weapon_acquisition')
+            return self.report
         if self.encounter is None or self.encounter['target'] != target['id']:
             self.encounter = {'target': target['id'], 'start': now, 'spent': 0.,
                 'hits': deque(), 'grace': now+min(self.MAX_PROBE_S, max(self.PROBE_S, schedule['first_hit_s']+1.)),

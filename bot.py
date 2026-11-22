@@ -562,13 +562,31 @@ class Bot:
         if self.ground_routes.index is not None and not ground_scope:
             self.ground_goal_pending = True
         urgent = not me["in_zone"] or distance(p, center) + s["radius"] + 8 > future_radius
-        duel = self.duel.decide(obs, threats, target, s, urgent=urgent)
         was_recovering = self.recover
+        acquisition = None
+
+        def acquire_weapon():
+            nonlocal acquisition
+            # Duel has already cleared the current health/threat gates. The
+            # previous frame's recovery state must not bias this healthy scan.
+            self.recover = False
+            try:
+                candidate = self.resource_goal(obs, threats, deadline=min(deadline - .017, time.perf_counter() + .004))
+            finally:
+                self.recover = was_recovering
+            if candidate and candidate[2] == 'pickups':
+                acquisition = candidate
+                return True
+            return False
+
+        duel = self.duel.decide(obs, threats, target, s, urgent=urgent, acquire_weapon=acquire_weapon)
         self.recover = duel['retreat']
         if self.recover and not was_recovering:
             self.goal_until = -1.0
         # Escaping a fight takes precedence over an attractive loot objective.
-        resource = self.resource_goal(obs, threats, deadline=min(deadline - .017, time.perf_counter() + .004)) if not urgent and not self.recover and duel['phase'] == 'idle' else None
+        resource = acquisition
+        if resource is None and not urgent and not self.recover and duel['phase'] == 'idle':
+            resource = self.resource_goal(obs, threats, deadline=min(deadline - .017, time.perf_counter() + .004))
         self.resource_key = resource[3] if resource else None
         if urgent:
             self.mode = "rotate"
@@ -652,7 +670,9 @@ class Bot:
             obs, threats, s, self.map.line_of_fire, min(deadline-.012, time.perf_counter()+.0006))
         # Keep the existing defensive-fire windows while escaping, with a
         # narrow protected-position override to start the regeneration clock.
-        allow_fire = (not self.recover or imminent or active_contact) and not quiet
+        # At the existing recovery-exit threshold, retain defensive fire while
+        # withdrawing. Emergency still blocks new slow laser charges.
+        allow_fire = (not self.recover or hp >= self.duel.HEALED_HP or imminent or active_contact) and not quiet
         combat = self.combat.plan(obs, target, allow_fire=allow_fire, emergency=urgent or self.recover)
         navigation = self.map.navigate(p, goal, s["radius"], s["height"], deadline=deadline - .012)
         if distance(p, goal) < 1.5:

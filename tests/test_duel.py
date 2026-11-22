@@ -216,9 +216,10 @@ class DuelTests(unittest.TestCase):
         self.obs['self']['hp'] = 1050
         self.assertEqual(self.step(24.3, events=[{'type': 'damaged', 'weapon': 'gun', 'by': 5, 'amount': 350}])['reason'], 'health_cost')
 
-    def test_probe_preempts_resource_targeting(self):
+    def test_existing_probe_preempts_resource_targeting(self):
         self.obs['mechs'] = [self.enemy(100)]
         self.obs['crates'] = [{'id': 1001, 'hp': 300, 'pos': [40, 0, 0]}]
+        self.step()
         with patch.object(self.bot, 'resource_goal', side_effect=AssertionError('probe preempts loot')):
             action = self.bot.act(self.obs)
         self.assertEqual(self.bot.mode, 'engage')
